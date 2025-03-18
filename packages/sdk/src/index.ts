@@ -1,4 +1,3 @@
-// Export all public APIs
 export { SimStudio } from './core'
 export { WorkflowBuilder } from './workflows/builder'
 export { Block as BlockBase } from './blocks/base'
@@ -9,8 +8,9 @@ export { RouterBlock } from './blocks/router'
 export { ApiBlock } from './blocks/api'
 export { EvaluatorBlock } from './blocks/evaluator'
 export { StarterBlock } from './blocks/starter'
+export { WorkflowCodeGenerator } from './code-generator'
+
 export * from './utils'
 export * from './types'
-export { WorkflowCodeGenerator } from './code-generator'
 export * from './blocks/registry'
 export * from './tools'

@@ -1,7 +1,5 @@
 import { SimStudio } from '../src';
 import { AgentBlock } from '../src/blocks/agent';
-import { getToolRequiredParameters, isToolAvailable } from '../src/generated';
-import { Tool } from '../src/tools';
 
 /**
  * Example showing how to use tools with agent blocks
@@ -18,110 +16,78 @@ async function usingToolsExample() {
     'Research a topic and summarize findings'
   );
 
-  // Create the agent block
+  // Create the agent block with tools
   const researchAgentBlock = new AgentBlock({
     model: 'claude-3-opus',
-    prompt: 'Research the topic "{{input.topic}}" and provide a comprehensive summary. Use search tools to gather information.',
+    prompt: 'Research the topic "{{input.topic}}" and provide a comprehensive summary. Use the search tools to gather information.',
     systemPrompt: 'You are a research assistant that can search the web for information and compile comprehensive reports.',
     temperature: 0.5,
-    tools: [], // We'll add tools to this later
+    // Reference tools by their IDs using the tools property
+    tools: [] // Will be populated with tool references
   }).setName('Research Agent');
+
+  // Reference built-in tools by their IDs
+  // The system will automatically transform these references into tool definitions
+  researchAgentBlock.data.toolReferences = ['tavily_search', 'serper_search'];
+  
+  // Configure tool settings with required parameters
+  researchAgentBlock.data.toolSettings = {
+    // Each tool gets its required parameters
+    tavily_search: {
+      apiKey: 'your-tavily-api-key'
+    },
+    serper_search: {
+      apiKey: 'your-serper-api-key'
+    }
+  };
 
   // Add the agent to the workflow
   workflow.addBlock(researchAgentBlock);
+
+  // For custom tools, users can still define them directly if needed
+  // This is equivalent to when a user creates a custom tool in the UI
+  const customTool = {
+    name: 'findCompany',
+    description: 'Find information about a company by name',
+    parameters: {
+      type: 'object',
+      properties: {
+        companyName: {
+          type: 'string',
+          description: 'The name of the company to find information about'
+        },
+        detailLevel: {
+          type: 'string',
+          enum: ['basic', 'detailed'],
+          description: 'The level of detail to return',
+          default: 'basic'
+        }
+      },
+      required: ['companyName']
+    }
+  };
+  
+  // Add the custom tool to the agent
+  if (!researchAgentBlock.data.tools) {
+    researchAgentBlock.data.tools = [];
+  }
+  researchAgentBlock.data.tools.push(customTool);
+  
+  console.log('Added tools to the agent');
 
   // Connect the starter block to the agent
   const starterBlock = workflow.getStarterBlock();
   workflow.connect(starterBlock.id, researchAgentBlock.id);
   
-  // Add Tavily search tool if available
-  if (isToolAvailable('tavily_search')) {
-    
-    // Get the required parameters for the tool
-    const requiredParams = getToolRequiredParameters('tavily_search');
-    
-    // Create tool settings with required parameters
-    researchAgentBlock.data.toolSettings = {
-      tavily_search: {
-        apiKey: 'your-tavily-api-key', // Required parameter for tavily_search
-      }
-    };
-    
-    // Create a tool object
-    const tavilyTool: Tool = {
-      id: 'tavily_search',
-      name: 'Tavily Search',
-      description: 'Search the web for information using Tavily API',
-      schema: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'Search query'
-          },
-          max_results: {
-            type: 'number',
-            description: 'Maximum number of results to return',
-            default: 5
-          }
-        },
-        required: ['query']
-      },
-      execute: async (params: any) => {
-        // This is a mock implementation
-        return { results: ['Mock result 1', 'Mock result 2'] };
-      }
-    };
-    
-    // Add the tool to the agent
-    researchAgentBlock.addTool(tavilyTool);
-  }
-  
-  // Add Serper search tool if available
-  if (isToolAvailable('serper_search')) {
-    // Get the required parameters for the tool
-    const requiredParams = getToolRequiredParameters('serper_search');
-    
-    // Add the required parameters to tool settings
-    researchAgentBlock.data.toolSettings = {
-      ...researchAgentBlock.data.toolSettings,
-      serper_search: {
-        apiKey: 'your-serper-api-key', // Required parameter for serper_search
-      }
-    };
-    
-    // Create a tool object
-    const serperTool: Tool = {
-      id: 'serper_search',
-      name: 'Serper Search',
-      description: 'Search the web for information using Serper API',
-      schema: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'Search query'
-          },
-          num_results: {
-            type: 'number',
-            description: 'Number of results to return',
-            default: 10
-          }
-        },
-        required: ['query']
-      },
-      execute: async (params: any) => {
-        // This is a mock implementation
-        return { results: ['Mock result 1', 'Mock result 2'] };
-      }
-    };
-    
-    // Add the tool to the agent
-    researchAgentBlock.addTool(serperTool);
-  }
-  
   // Build the workflow
   const builtWorkflow = workflow.build();
+  console.log('Workflow built successfully with search tools');
+  
+  // In a real scenario, you would save and deploy the workflow
+  console.log('To execute this workflow, you would:');
+  console.log('1. Save the workflow: simStudio.saveWorkflow(workflow)');
+  console.log('2. Deploy the workflow: simStudio.deployWorkflow(workflowId)');
+  console.log('3. Execute the workflow: simStudio.executeWorkflow(workflowId, { topic: "AI ethics" })');
   
   return builtWorkflow;
 }
