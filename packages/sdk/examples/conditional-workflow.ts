@@ -1,7 +1,7 @@
-import { SimStudio } from '../src';
-import { AgentBlock } from '../src/blocks/agent';
-import { ConditionBlock } from '../src/blocks/condition';
-import { FunctionBlock } from '../src/blocks/function';
+import { SimStudio } from '../src'
+import { AgentBlock } from '../src/blocks/agent'
+import { ConditionBlock } from '../src/blocks/condition'
+import { FunctionBlock } from '../src/blocks/function'
 
 /**
  * Example showing how to create a workflow with conditional branches
@@ -12,13 +12,13 @@ async function conditionalWorkflowExample() {
     // Initialize Sim Studio SDK
     const simStudio = new SimStudio({
       apiKey: 'your-api-key', // Replace with your actual API key
-    });
+    })
 
     // Create a workflow for handling customer inquiries
     const workflow = simStudio.createWorkflow(
       'Customer Inquiry Router',
       'Routes customer inquiries to appropriate departments based on content'
-    );
+    )
 
     // Create a classifier agent block
     const classifierBlock = new AgentBlock({
@@ -28,104 +28,134 @@ async function conditionalWorkflowExample() {
         Determine which category it belongs to:
         - technical: Technical support requests or product troubleshooting
         - billing: Questions about billing, subscriptions, or payments
-        - general: General information requests
+        - general: General inquiries, feedback, or other topics
         
-        Return ONLY the category name as a single word (technical, billing, or general).
+        Output ONLY the category name as your response: technical, billing, or general.
       `,
-      temperature: 0.1
-    }).setName('Inquiry Classifier');
+      systemPrompt: 'You are a customer inquiry classifier. Categorize inquiries into technical, billing, or general categories.',
+      temperature: 0.3,
+      apiKey: 'your-agent-api-key' // Include apiKey directly
+    }).setName('Inquiry Classifier')
 
-    // Create a condition block to route based on classification
-    const routingConditionBlock = new ConditionBlock({
+    // Create a condition block that routes based on the classification
+    const conditionData = {
       conditions: [
         { expression: 'input.classification === "technical"', id: 'technical' },
         { expression: 'input.classification === "billing"', id: 'billing' },
         { expression: 'input.classification === "general"', id: 'general' }
-      ]
-    }).setName('Route Inquiry');
+      ],
+      code: `
+        function route(input) {
+          if (input.classification === "technical") return "technical"
+          if (input.classification === "billing") return "billing"
+          if (input.classification === "general") return "general"
+          return "general" // default fallback
+        }
+      `
+    }
+    
+    const conditionBlock = new ConditionBlock(conditionData).setName('Route Inquiry')
 
-    // Create specialized agent blocks for each department
+    // Create department-specific handler blocks
     const technicalSupportBlock = new AgentBlock({
       model: 'claude-3-sonnet',
-      prompt: `
-        You are a technical support specialist.
-        Respond to the following technical support inquiry: "{{input.inquiry}}"
-        Provide detailed troubleshooting steps and solutions.
-      `,
-      temperature: 0.3
-    }).setName('Technical Support');
+      prompt: 'Provide technical support for the following inquiry: {{input.inquiry}}',
+      systemPrompt: 'You are a technical support specialist. Provide detailed technical assistance.',
+      temperature: 0.7,
+      apiKey: 'your-agent-api-key' 
+    }).setName('Technical Support')
 
-    const billingBlock = new AgentBlock({
+    const billingSupportBlock = new AgentBlock({
       model: 'claude-3-sonnet',
-      prompt: `
-        You are a billing specialist.
-        Respond to the following billing inquiry: "{{input.inquiry}}"
-        Provide clear information about billing processes, payment options, or subscription details.
-      `,
-      temperature: 0.3
-    }).setName('Billing Department');
+      prompt: 'Address the following billing inquiry: {{input.inquiry}}',
+      systemPrompt: 'You are a billing specialist. Help customers with payment and subscription issues.',
+      temperature: 0.7,
+      apiKey: 'your-agent-api-key' 
+    }).setName('Billing Support')
 
-    const generalInfoBlock = new AgentBlock({
+    const generalSupportBlock = new AgentBlock({
       model: 'claude-3-sonnet',
-      prompt: `
-        You are a customer service representative.
-        Respond to the following general inquiry: "{{input.inquiry}}"
-        Provide helpful information about the company, products, or services.
-      `,
-      temperature: 0.3
-    }).setName('General Information');
+      prompt: 'Address the following general inquiry: {{input.inquiry}}',
+      systemPrompt: 'You are a customer support agent. Provide helpful and friendly assistance.',
+      temperature: 0.7,
+      apiKey: 'your-agent-api-key' 
+    }).setName('General Support')
 
-    // Create a response formatter block
+    // Add response formatter
     const formatterBlock = new FunctionBlock({
       code: `
         function formatResponse(input) {
           return {
-            category: input.classification,
-            response: input.response,
+            inquiry: input.inquiry,
+            department: input.classification || "unknown",
+            response: input.content,
             timestamp: new Date().toISOString()
-          };
+          }
         }
       `
-    }).setName('Response Formatter');
+    }).setName('Response Formatter')
 
     // Add all blocks to the workflow
-    workflow.addBlock(classifierBlock);
-    workflow.addBlock(routingConditionBlock);
-    workflow.addBlock(technicalSupportBlock);
-    workflow.addBlock(billingBlock);
-    workflow.addBlock(generalInfoBlock);
-    workflow.addBlock(formatterBlock);
+    workflow
+      .addBlock(classifierBlock)
+      .addBlock(conditionBlock)
+      .addBlock(technicalSupportBlock)
+      .addBlock(billingSupportBlock)
+      .addBlock(generalSupportBlock)
+      .addBlock(formatterBlock)
 
-    // Connect the starter block to the classifier
-    const starterBlock = workflow.getStarterBlock();
-    workflow.connect(starterBlock.id, classifierBlock.id);
+    // Connect the blocks
+    const starterBlock = workflow.getStarterBlock()
     
-    // Connect classifier to the condition block
-    workflow.connect(classifierBlock.id, routingConditionBlock.id);
+    // Connect starter to classifier
+    workflow.connect(starterBlock.id, classifierBlock.id)
     
-    // Connect condition block to department-specific blocks based on conditions
-    workflow.connect(routingConditionBlock.id, technicalSupportBlock.id, { sourceHandle: 'condition-technical' });
-    workflow.connect(routingConditionBlock.id, billingBlock.id, { sourceHandle: 'condition-billing' });
-    workflow.connect(routingConditionBlock.id, generalInfoBlock.id, { sourceHandle: 'condition-general' });
+    // Connect classifier to condition
+    workflow.connect(classifierBlock.id, conditionBlock.id)
     
-    // Connect all department blocks to the formatter
-    workflow.connect(technicalSupportBlock.id, formatterBlock.id);
-    workflow.connect(billingBlock.id, formatterBlock.id);
-    workflow.connect(generalInfoBlock.id, formatterBlock.id);
+    // Connect condition outcomes to department-specific blocks
+    workflow.connect(
+      conditionBlock.id, 
+      technicalSupportBlock.id, 
+      { sourceHandle: 'condition-technical' }
+    )
+    
+    workflow.connect(
+      conditionBlock.id, 
+      billingSupportBlock.id, 
+      { sourceHandle: 'condition-billing' }
+    )
+    
+    workflow.connect(
+      conditionBlock.id, 
+      generalSupportBlock.id, 
+      { sourceHandle: 'condition-general' }
+    )
+    
+    // Connect all support blocks to the formatter
+    workflow.connect(technicalSupportBlock.id, formatterBlock.id)
+    workflow.connect(billingSupportBlock.id, formatterBlock.id)
+    workflow.connect(generalSupportBlock.id, formatterBlock.id)
 
     // Build the workflow
-    const builtWorkflow = workflow.build();
+    const builtWorkflow = workflow.build()
+    console.log('Conditional workflow built successfully')
     
-    return builtWorkflow;
+    // Example of executing the workflow
+    const workflowId = '123456' // In a real scenario, this would be the ID returned from saveWorkflow
+    console.log(`To execute this workflow with an inquiry: simStudio.executeWorkflow('${workflowId}', { inquiry: "I can't login to my account" })`)
+    
+    return builtWorkflow
+    
   } catch (error) {
-    console.error('Error in conditional workflow setup:', error);
-    throw error;
+    console.error('Error creating conditional workflow:', error)
+    throw error
   }
 }
 
 // Run the example
 if (require.main === module) {
-  conditionalWorkflowExample().catch(console.error);
+  conditionalWorkflowExample().catch(console.error)
 }
 
-export default conditionalWorkflowExample; 
+export default conditionalWorkflowExample 

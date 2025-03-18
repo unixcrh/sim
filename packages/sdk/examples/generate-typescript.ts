@@ -8,7 +8,6 @@ const __dirname = path.resolve()
  * Example demonstrating how to generate TypeScript code from a workflow
  */
 async function generateWorkflowCode() {
-  // Create a workflow using the SDK
   const simStudio = new SimStudio({
     apiKey: 'your-api-key',
   })
@@ -24,6 +23,7 @@ async function generateWorkflowCode() {
     prompt: 'Generate 5 blog post ideas about {{input.topic}}',
     systemPrompt: 'You are a creative content strategist.',
     temperature: 0.8,
+    apiKey: 'your-agent-api-key'
   }).setName('Generate Ideas')
 
   const outlineBlock = new AgentBlock({
@@ -31,6 +31,7 @@ async function generateWorkflowCode() {
     prompt: 'Create a detailed outline for this blog post idea: {{input.selectedIdea}}',
     systemPrompt: 'You are a skilled content outliner.',
     temperature: 0.7,
+    apiKey: 'your-agent-api-key'
   }).setName('Create Outline')
 
   const draftBlock = new AgentBlock({
@@ -39,6 +40,7 @@ async function generateWorkflowCode() {
     systemPrompt: 'You are a professional blog writer with expertise in creating engaging content.',
     temperature: 0.6,
     maxTokens: 2500,
+    apiKey: 'your-agent-api-key'
   }).setName('Write Draft')
 
   const optimizeBlock = new AgentBlock({
@@ -46,6 +48,7 @@ async function generateWorkflowCode() {
     prompt: 'Optimize this blog post for SEO: {{input.draft}}',
     systemPrompt: 'You are an SEO expert. Add relevant keywords, improve readability, and optimize for search engines.',
     temperature: 0.4,
+    apiKey: 'your-agent-api-key'
   }).setName('Optimize for SEO')
 
   // Add blocks to workflow

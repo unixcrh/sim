@@ -18,6 +18,7 @@ async function createAndDeployWorkflow() {
     prompt: '{{input.message}}',
     systemPrompt: 'You are a helpful customer support assistant.',
     temperature: 0.7,
+    apiKey: 'your-agent-api-key'
   }).setName('Analyze Request')
 
   const categoryBlock = new FunctionBlock({
@@ -44,18 +45,21 @@ async function createAndDeployWorkflow() {
     model: 'claude-3-haiku',
     prompt: 'Create a response for this refund request: {{input.message}}',
     systemPrompt: 'You are a refund specialist.',
+    apiKey: 'your-agent-api-key'
   }).setName('Handle Refund')
 
   const shippingBlock = new AgentBlock({
     model: 'claude-3-haiku',
     prompt: 'Create a response for this shipping request: {{input.message}}',
     systemPrompt: 'You are a shipping specialist.',
+    apiKey: 'your-agent-api-key'
   }).setName('Handle Shipping')
 
   const generalBlock = new AgentBlock({
     model: 'claude-3-haiku',
     prompt: 'Create a response for this general request: {{input.message}}',
     systemPrompt: 'You are a general support specialist.',
+    apiKey: 'your-agent-api-key'
   }).setName('Handle General')
 
   const slackNotificationBlock = new ApiBlock({

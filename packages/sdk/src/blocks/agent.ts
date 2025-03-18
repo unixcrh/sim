@@ -8,6 +8,7 @@ export interface AgentOptions {
   maxTokens?: number
   systemPrompt?: string
   tools?: AgentTool[]
+  apiKey: string
 }
 
 export interface AgentTool {
