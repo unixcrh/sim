@@ -1,6 +1,6 @@
 /**
  * This file is auto-generated. Do not edit directly.
- * Generated at 2025-03-18T23:21:40.404Z
+ * Generated at 2025-03-18T23:55:40.504Z
  */
 
 /**
@@ -214,7 +214,7 @@ export const toolRequiredParameters: Record<string, string[]> = {
 export const blockRequiredParameters: Record<string, string[]> = {
     'agent': ["model","apiKey"],
   'api': ["url","method"],
-  'condition': ["code"],
+  'condition': [],
   'evaluator': ["metrics","model","apiKey","content"],
   'exa': ["operation","apiKey"],
   'firecrawl': ["apiKey","url"],

@@ -9,7 +9,6 @@ import { FunctionBlock } from '../src/blocks/function'
  */
 async function conditionalWorkflowExample() {
   try {
-    // Initialize Sim Studio SDK
     const simStudio = new SimStudio({
       apiKey: 'your-api-key', // Replace with your actual API key
     })
@@ -43,15 +42,7 @@ async function conditionalWorkflowExample() {
         { expression: 'input.classification === "technical"', id: 'technical' },
         { expression: 'input.classification === "billing"', id: 'billing' },
         { expression: 'input.classification === "general"', id: 'general' }
-      ],
-      code: `
-        function route(input) {
-          if (input.classification === "technical") return "technical"
-          if (input.classification === "billing") return "billing"
-          if (input.classification === "general") return "general"
-          return "general" // default fallback
-        }
-      `
+      ]
     }
     
     const conditionBlock = new ConditionBlock(conditionData).setName('Route Inquiry')

@@ -1,5 +1,4 @@
 import { SimStudio, AgentBlock, FunctionBlock } from '../src'
-import { Block } from '../src/blocks/base'
 
 /**
  * Creates a simple workflow with Sim Studio SDK
@@ -65,11 +64,6 @@ async function createBasicWorkflow() {
 
   // Build the workflow
   const workflow = workflowBuilder.build()
-  console.log('Workflow built successfully with the following blocks:')
-  console.log('- Starter Block')
-  console.log('- Content Generator')
-  console.log('- Formatter')
-  console.log('- SEO Optimizer')
 
   // Execute the workflow
   try {

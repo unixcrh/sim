@@ -7,7 +7,6 @@ import { FunctionBlock } from '../src/blocks/function'
  */
 async function buildExecuteWorkflowExample() {
   try {
-    // Initialize Sim Studio SDK
     const simStudio = new SimStudio({
       apiKey: 'your-api-key', // Replace with your actual API key
     })
