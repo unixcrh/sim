@@ -1,6 +1,6 @@
 # Sim Studio SDK
 
-The Sim Studio SDK allows developers to create, manage, and deploy workflows programmatically.
+Official SDK for Sim Studio - build, deploy, and manage agentic workflows.
 
 ## Installation
 
@@ -8,216 +8,216 @@ The Sim Studio SDK allows developers to create, manage, and deploy workflows pro
 npm install @sim-studio/sdk
 ```
 
-## Usage
+## Getting Started
 
-### Creating a Simple Workflow
+To use the Sim Studio SDK, you'll need an API key from your Sim Studio account.
+
+```typescript
+import { SimStudio } from '@sim-studio/sdk';
+
+// Initialize the SDK with your API key
+const simStudio = new SimStudio({
+  apiKey: 'your-api-key',
+  // Optional configurations:
+  // baseUrl: 'https://your-custom-url.com', // Default is https://simstudio.ai
+  // timeout: 60000, // Default is 30000ms
+});
+```
+
+## Creating Workflows
+
+You can create workflows programmatically using the WorkflowBuilder:
 
 ```typescript
 import { SimStudio, AgentBlock, FunctionBlock } from '@sim-studio/sdk';
 
-// Initialize the SDK
-const simStudio = new SimStudio({
-  apiKey: 'your-api-key',
-});
-
-// Create a workflow
-const workflow = simStudio.createWorkflow(
-  'Simple Workflow',
-  'A simple workflow that uses an agent to generate content'
-);
-
-// Create an agent block
-const agentBlock = new AgentBlock({
-  model: 'claude-3-7-sonnet',
-  prompt: 'Write a blog post about <input.topic>',
-  systemPrompt: 'You are a professional content writer.',
-});
-
-// Create a function block to format the content
-const formatterBlock = new FunctionBlock({
-  code: `
-    function formatContent(input) {
+async function createWorkflow() {
+  const simStudio = new SimStudio({ apiKey: 'your-api-key' });
+  
+  // Create a new workflow builder
+  const builder = simStudio.createWorkflow('Content Generator', 'Generates and optimizes content');
+  
+  // Get the starter block (automatically added to new workflows)
+  const starterBlock = builder.getStarterBlock();
+  
+  // Create an agent block for content generation
+  const contentBlock = new AgentBlock({
+    model: 'gpt-4',
+    apiKey: '{{OPENAI_API_KEY}}', // Using environment variable
+    prompt: 'Generate blog content about: {{input.topic}}',
+    systemPrompt: 'You are a professional content writer specializing in blog posts.'
+  }).setName('Content Generator');
+  
+  // Create a function block for formatting
+  const formatterBlock = new FunctionBlock({
+    code: `
+      // Format the content
       return {
-        title: "Blog: " + input.topic,
-        content: input.content,
-        wordCount: input.content.split(' ').length
+        title: input.response.substring(0, input.response.indexOf('\n')),
+        content: input.response.substring(input.response.indexOf('\n') + 1),
+        wordCount: input.response.split(' ').length
       };
-    }
-  `
-});
+    `
+  }).setName('Content Formatter');
+  
+  // Add blocks to the workflow
+  builder.addBlock(contentBlock);
+  builder.addBlock(formatterBlock);
+  
+  // Connect blocks together
+  builder.connect(starterBlock.id, contentBlock.id);
+  builder.connect(contentBlock.id, formatterBlock.id);
+  
+  // Build the workflow definition
+  const workflow = builder.build();
+  
+  // Save the workflow to Sim Studio
+  const savedWorkflow = await simStudio.saveWorkflow(workflow);
+  console.log(`Workflow saved with ID: ${savedWorkflow.id}`);
+  
+  return savedWorkflow;
+}
+```
 
-// Add blocks to the workflow
-workflow.addBlock(agentBlock);
-workflow.addBlock(formatterBlock);
+## Executing Workflows
 
-// Connect blocks
-const starterBlock = workflow.getStarterBlock();
-workflow.connect(starterBlock.id, agentBlock.id);
-workflow.connect(agentBlock.id, formatterBlock.id);
+Execute a workflow by its ID:
 
-// Build and save the workflow
-const builtWorkflow = workflow.build();
-simStudio.saveWorkflow(builtWorkflow)
-  .then(savedWorkflow => {
-    console.log(`Workflow saved with ID: ${savedWorkflow.id}`);
+```typescript
+async function executeWorkflow(workflowId) {
+  const simStudio = new SimStudio({ apiKey: 'your-api-key' });
+  
+  const input = {
+    topic: 'Artificial Intelligence in Healthcare'
+  };
+  
+  const result = await simStudio.executeWorkflow(workflowId, input);
+  
+  if (result.success) {
+    console.log('Workflow executed successfully!');
+    console.log('Output:', result.output.response);
+  } else {
+    console.error('Workflow execution failed:', result.error);
+  }
+  
+  return result;
+}
+```
+
+## Deploying Workflows
+
+Deploy a workflow as an API endpoint:
+
+```typescript
+async function deployWorkflow(workflowId) {
+  const simStudio = new SimStudio({ apiKey: 'your-api-key' });
+  
+  const deployment = await simStudio.deployWorkflow(workflowId, {
+    isPublic: true,
+    authentication: 'api_key',
+    rateLimit: 100
   });
+  
+  console.log(`Workflow deployed at: ${deployment.url}`);
+  return deployment;
+}
 ```
 
-### Using Tools with Agents
+## Scheduling Workflows
 
-Agent blocks can use tools for enhanced capabilities. You can simply reference built-in tools by ID or define custom tools:
+Schedule a workflow to run on a recurring basis:
 
 ```typescript
-import { SimStudio, AgentBlock } from '@sim-studio/sdk';
-
-// Initialize the SDK
-const simStudio = new SimStudio({
-  apiKey: 'your-api-key',
-});
-
-// Create a workflow
-const workflow = simStudio.createWorkflow('Research Assistant');
-
-// Create an agent block
-const researchAgent = new AgentBlock({
-  model: 'claude-3-opus',
-  prompt: 'Research the topic "{{input.topic}}" and provide a comprehensive summary.',
-  systemPrompt: 'You are a research assistant.',
-  tools: [] // Will be populated with tool references
-});
-
-// Reference built-in tools by their IDs
-// The system will automatically transform these references into tool definitions
-researchAgent.data.toolReferences = ['tavily_search', 'serper_search'];
-
-// Configure tool settings with required parameters
-researchAgent.data.toolSettings = {
-  tavily_search: {
-    apiKey: 'your-tavily-api-key'
-  },
-  serper_search: {
-    apiKey: 'your-serper-api-key'
-  }
-};
-
-// For custom tools, you can define them directly
-const customTool = {
-  name: 'findCompany',
-  description: 'Find information about a company by name',
-  parameters: {
-    type: 'object',
-    properties: {
-      companyName: {
-        type: 'string',
-        description: 'The name of the company'
-      }
-    },
-    required: ['companyName']
-  }
-};
-
-// Add the custom tool to the agent
-researchAgent.data.tools.push(customTool);
-
-// Add to workflow
-workflow.addBlock(researchAgent);
-
-// Connect to starter
-const starterBlock = workflow.getStarterBlock();
-workflow.connect(starterBlock.id, researchAgent.id);
-
-// Build and save
-const builtWorkflow = workflow.build();
+async function scheduleWorkflow(workflowId) {
+  const simStudio = new SimStudio({ apiKey: 'your-api-key' });
+  
+  const schedule = await simStudio.scheduleWorkflow(workflowId, {
+    cron: '0 9 * * 1-5', // Run at 9 AM on weekdays
+    timezone: 'America/New_York',
+    input: {
+      topic: 'Daily AI News'
+    }
+  });
+  
+  console.log(`Workflow scheduled with ID: ${schedule.id}`);
+  console.log(`Next run at: ${schedule.nextRunAt}`);
+  
+  return schedule;
+}
 ```
 
-### Creating Conditional Workflows
+## Direct Execution with Executor
 
-You can create workflows with conditional branching using the ConditionBlock:
+For more control over workflow execution, you can use the Executor directly:
 
 ```typescript
-import { SimStudio, AgentBlock, ConditionBlock } from '@sim-studio/sdk';
+import { Executor, WorkflowBuilder, AgentBlock } from '@sim-studio/sdk';
 
-// Create a condition block
-const conditionBlock = new ConditionBlock({
-  conditions: [
-    { expression: 'input.score > 0.8', id: 'high' },
-    { expression: 'input.score > 0.5', id: 'medium' },
-    { expression: 'true', id: 'low' }
-  ]
-});
-
-// Connect condition outcomes to different blocks
-workflow.connect(
-  conditionBlock.id, 
-  highQualityBlock.id, 
-  { sourceHandle: 'condition-high' }
-);
-
-workflow.connect(
-  conditionBlock.id, 
-  mediumQualityBlock.id, 
-  { sourceHandle: 'condition-medium' }
-);
-
-workflow.connect(
-  conditionBlock.id, 
-  lowQualityBlock.id, 
-  { sourceHandle: 'condition-low' }
-);
+async function executeWorkflowDirectly() {
+  // Create a workflow
+  const builder = new WorkflowBuilder('Test Workflow');
+  const starterBlock = builder.getStarterBlock();
+  
+  const agentBlock = new AgentBlock({
+    model: 'gpt-4',
+    apiKey: 'your-api-key',
+    prompt: 'Hello {{input.name}}!'
+  }).setName('Greeter');
+  
+  builder.addBlock(agentBlock);
+  builder.connect(starterBlock.id, agentBlock.id);
+  
+  const workflow = builder.build();
+  
+  // Create executor with API key
+  const executor = new Executor({
+    apiKey: 'your-sim-studio-api-key'
+  });
+  
+  // Execute the workflow directly
+  // This will first save the workflow and then execute it
+  const result = await executor.executeWorkflow(workflow, {
+    name: 'World'
+  });
+  
+  console.log(result.output.response); // Should output "Hello World!"
+  return result;
+}
 ```
 
-## API Reference
+## Available Block Types
 
-### SimStudio
+The SDK includes several block types that you can use to build workflows:
 
-- `createWorkflow(name, description?)`: Creates a new workflow builder
-- `saveWorkflow(workflow)`: Saves a workflow and returns the saved workflow with ID
-- `deployWorkflow(workflowId, options?)`: Deploys a workflow
-- `executeWorkflow(workflowId, input)`: Executes a workflow with the given input
+- `StarterBlock`: Entry point for workflow execution
+- `AgentBlock`: LLM-powered agent for generating content
+- `FunctionBlock`: Custom JavaScript code execution
+- `ConditionBlock`: Branch workflows based on conditions
+- `RouterBlock`: Route execution based on predefined paths
+- `ApiBlock`: Make API requests to external services
+- `EvaluatorBlock`: Evaluate content against criteria
 
-### WorkflowBuilder
+## Environment Variables
 
-- `addBlock(block)`: Adds a block to the workflow
-- `connect(sourceId, targetId, options?)`: Connects two blocks
-- `getStarterBlock()`: Gets the starter block
-- `build()`: Builds the workflow
+You can use environment variables in your workflows by using the `{{VARIABLE_NAME}}` syntax. These will be replaced with values from your Sim Studio environment settings at runtime.
 
-### Block Types
+## Error Handling
 
-- `AgentBlock`: Agent that can generate content using LLMs
-- `FunctionBlock`: Executes JavaScript code
-- `ConditionBlock`: Routes based on conditions
-- `RouterBlock`: Routes based on agent decisions
-- `ApiBlock`: Makes HTTP requests
-- `EvaluatorBlock`: Evaluates content quality
+The SDK provides detailed error handling:
 
-## Examples
-
-See the [examples](./examples) directory for more examples of using the SDK.
-
-## Features
-
-- Create and manage workflows programmatically
-- Build complex workflows with various block types
-- Execute workflows and retrieve results
-- Deploy workflows as API endpoints
-- Schedule workflows for automatic execution
-
-## Block Types
-
-The SDK supports all Sim Studio block types:
-
-- **Agent**: LLM-powered operations
-- **Function**: Custom JavaScript code execution
-- **Condition**: Branching based on logical expressions
-- **Router**: Dynamic path selection
-- **API**: HTTP requests
-- **Evaluator**: LLM-based output assessment
-
-## Documentation
-
-For detailed documentation, visit [docs.simstudio.dev](https://docs.simstudio.dev)
+```typescript
+try {
+  const result = await simStudio.executeWorkflow('workflow-id', input);
+  // Handle successful execution
+} catch (error) {
+  if (error.status) {
+    console.error(`API Error (${error.status}):`, error.message);
+  } else {
+    console.error('Execution error:', error.message);
+  }
+}
+```
 
 ## License
 
-MIT 
+[MIT License](LICENSE) 
