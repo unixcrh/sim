@@ -1,0 +1,123 @@
+---
+title: SDK
+description: The official JavaScript SDK for Sim Studio
+---
+
+# Sim Studio SDK
+
+The Sim Studio SDK allows you to programmatically build, deploy, and manage workflows without using the web interface. This enables developers to integrate Sim Studio capabilities directly into their applications, automate workflow creation and execution, and build advanced integrations.
+
+## Installation
+
+```bash
+# npm
+npm install @sim-studio/sdk
+
+# yarn
+yarn add @sim-studio/sdk
+
+# pnpm
+pnpm add @sim-studio/sdk
+```
+
+## Authentication
+
+Before using the SDK, you'll need an API key from your Sim Studio account. You can provide your API key in two ways:
+
+### Option 1: Direct initialization
+
+```typescript
+import { SimStudio } from '@sim-studio/sdk';
+
+const simStudio = new SimStudio({
+  apiKey: 'your-api-key', // Replace with your actual API key
+  // Optional configurations:
+  // baseUrl: 'https://your-custom-url.com', // Default is https://simstudio.ai
+  // timeout: 60000, // Default is 30000ms
+});
+```
+
+### Option 2: Environment variable
+
+Create a `.env` file in your project root:
+
+```
+SIM_STUDIO_API_KEY=your-api-key
+```
+
+And initialize the SDK without explicitly passing the key:
+
+```typescript
+import { SimStudio } from '@sim-studio/sdk';
+import 'dotenv/config'; // Make sure to install the dotenv package
+
+// The SDK will automatically load the API key from the environment
+const simStudio = new SimStudio();
+```
+
+> **Warning:** Never commit your API keys to source control. Use environment variables or a secure secret management solution for production applications.
+
+## Quick Start
+
+Here's a simple example of creating and executing a workflow:
+
+```typescript
+import { SimStudio, AgentBlock } from '@sim-studio/sdk';
+
+async function quickStart() {
+  // Initialize the SDK
+  const simStudio = new SimStudio({
+    apiKey: process.env.SIM_STUDIO_API_KEY,
+  });
+  
+  // Create a new workflow
+  const builder = simStudio.createWorkflow(
+    'Quick Answer',
+    'Simple Q&A workflow'
+  );
+  
+  // Add an agent block
+  const answerBlock = new AgentBlock({
+    model: 'claude-3-haiku',
+    prompt: '{{input.question}}',
+    systemPrompt: 'You are a helpful assistant that provides concise answers.',
+    temperature: 0.3,
+    apiKey: process.env.CLAUDE_API_KEY,
+  }).setName('Answer Generator');
+  
+  // Add the block to the workflow
+  builder.addBlock(answerBlock);
+  
+  // Connect the starter block to the agent block
+  const starterBlock = builder.getStarterBlock();
+  builder.connect(starterBlock.id, answerBlock.id);
+  
+  // Build and save the workflow
+  const workflow = builder.build();
+  const savedWorkflow = await simStudio.saveWorkflow(workflow);
+  
+  console.log(`Workflow saved with ID: ${savedWorkflow.id}`);
+  
+  // Execute the workflow
+  const result = await simStudio.execute(savedWorkflow.id, {
+    question: 'What is the capital of France?'
+  });
+  
+  if (result.success) {
+    console.log('Answer:', result.output.response);
+  }
+  
+  return result;
+}
+```
+
+## Core SDK Features
+
+The SDK provides comprehensive functionality for managing workflows:
+
+- **Create and edit workflows** programmatically
+- **Execute workflows** with custom inputs
+- **Deploy workflows** as API endpoints
+- **Schedule workflows** to run at specific times
+- **Manage existing workflows** (list, update, delete)
+- **Build workflows** with a variety of block types

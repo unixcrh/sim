@@ -1,0 +1,197 @@
+---
+title: Blocks
+description: Working with blocks in the Sim Studio SDK
+---
+
+# Working with Blocks
+
+Blocks are the fundamental building blocks of workflows in Sim Studio. The SDK provides a collection of block types that mirror the ones available in the web interface. This guide explains how to create and configure different types of blocks programmatically.
+
+## Common Block Properties
+
+All blocks share some common properties:
+
+```typescript
+interface BlockOptions {
+  id?: string;         // Optional, auto-generated if not provided
+  name?: string;       // Display name for the block
+  description?: string; // Description of what the block does
+  x?: number;          // X position in the workflow editor
+  y?: number;          // Y position in the workflow editor
+  metadata?: Record<string, any>; // Additional metadata
+}
+```
+
+## AgentBlock
+
+The `AgentBlock` is used for LLM-powered blocks that can generate content, answer questions, or perform other AI tasks.
+
+```typescript
+import { AgentBlock } from '@sim-studio/sdk';
+
+const agent = new AgentBlock({
+  model: 'claude-3-sonnet', // The LLM model to use
+  apiKey: process.env.CLAUDE_API_KEY, // API key for the model provider
+  prompt: 'Generate a blog post about {{input.topic}}', // Prompt template
+  systemPrompt: 'You are a professional content writer.', // System instructions
+  temperature: 0.7, // Controls randomness (0-1)
+  maxTokens: 2000, // Maximum tokens to generate
+}).setName('Content Generator');
+```
+
+## FunctionBlock
+
+The `FunctionBlock` allows you to execute custom JavaScript code as part of your workflow.
+
+```typescript
+import { FunctionBlock } from '@sim-studio/sdk';
+
+const formatter = new FunctionBlock({
+  code: `
+    function formatData(input) {
+      // Process the input
+      const formattedData = {
+        title: input.topic.toUpperCase(),
+        content: input.content,
+        wordCount: input.content.split(' ').length,
+        timestamp: new Date().toISOString()
+      };
+      
+      return formattedData;
+    }
+  `,
+  timeout: 5000, // Optional: timeout in milliseconds
+}).setName('Data Formatter');
+```
+
+## ConditionBlock
+
+The `ConditionBlock` allows your workflow to branch based on conditions.
+
+```typescript
+import { ConditionBlock } from '@sim-studio/sdk';
+
+const lengthCheck = new ConditionBlock({
+  condition: 'input.content.length > 500', // Evaluated as JavaScript
+  trueLabel: 'Long Content', // Optional: label for the true path
+  falseLabel: 'Short Content', // Optional: label for the false path
+}).setName('Length Check');
+```
+
+## RouterBlock
+
+The `RouterBlock` provides multiple output paths based on a routing expression.
+
+```typescript
+import { RouterBlock } from '@sim-studio/sdk';
+
+const contentRouter = new RouterBlock({
+  paths: [
+    { id: 'blog', label: 'Blog Post' },
+    { id: 'social', label: 'Social Media' },
+    { id: 'email', label: 'Email Newsletter' },
+  ],
+  routingExpression: 'input.contentType', // Returns a path ID
+  defaultPath: 'blog', // Optional: default path if no match
+}).setName('Content Router');
+```
+
+## ApiBlock
+
+The `ApiBlock` makes HTTP requests to external services.
+
+```typescript
+import { ApiBlock } from '@sim-studio/sdk';
+
+const weatherApi = new ApiBlock({
+  url: 'https://api.weatherapi.com/v1/current.json?key={{env.WEATHER_API_KEY}}&q={{input.location}}',
+  method: 'GET', // Default is GET
+  headers: {
+    'Accept': 'application/json',
+  },
+  timeout: 10000, // Optional: timeout in milliseconds
+}).setName('Weather API');
+```
+
+## EvaluatorBlock
+
+The `EvaluatorBlock` evaluates content against specified criteria.
+
+```typescript
+import { EvaluatorBlock } from '@sim-studio/sdk';
+
+const contentEvaluator = new EvaluatorBlock({
+  criteria: [
+    {
+      name: 'Readability',
+      expression: 'input.fleschScore > 60',
+      weight: 0.4,
+    },
+    {
+      name: 'Length',
+      expression: 'input.wordCount > 800 && input.wordCount < 2000',
+      weight: 0.3,
+    },
+    {
+      name: 'Keywords',
+      expression: 'input.keywordDensity > 0.02',
+      weight: 0.3,
+    },
+  ],
+  passThreshold: 0.7, // Score required to pass evaluation
+  passLabel: 'Approved', // Optional: label for pass path
+  failLabel: 'Needs Revision', // Optional: label for fail path
+}).setName('Content Evaluator');
+```
+
+## StarterBlock
+
+The `StarterBlock` is the entry point for workflows and is automatically added when you create a new workflow. You can access it with the `getStarterBlock()` method of the `WorkflowBuilder`.
+
+```typescript
+import { SimStudio } from '@sim-studio/sdk';
+
+const simStudio = new SimStudio({ apiKey: 'your-api-key' });
+const builder = simStudio.createWorkflow('My Workflow');
+
+// Get the starter block
+const starterBlock = builder.getStarterBlock();
+
+// Connect it to another block
+builder.connect(starterBlock.id, anotherBlock.id);
+```
+
+## Customizing Blocks
+
+You can further customize blocks using method chaining:
+
+```typescript
+const block = new AgentBlock({
+  // configuration
+})
+  .setName('Custom Name')
+  .setDescription('This block does something amazing')
+  .setPosition(200, 150) // Set X and Y coordinates
+  .setMetadata({ custom: 'value' });
+```
+
+## Connecting Blocks
+
+After creating blocks, you need to connect them to define the workflow path:
+
+```typescript
+// Add blocks to the workflow
+builder.addBlock(blockA);
+builder.addBlock(blockB);
+
+// Connect blocks
+builder.connect(blockA.id, blockB.id);
+
+// For blocks with multiple outputs, specify handles
+builder.connect(
+  conditionBlock.id, 
+  truePathBlock.id, 
+  'true', // Source handle
+  'input'  // Target handle (usually 'input')
+);
+```

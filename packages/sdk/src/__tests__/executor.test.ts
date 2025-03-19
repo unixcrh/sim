@@ -121,15 +121,15 @@ describe('Executor', () => {
       apiKey: 'test-api-key'
     })
 
-    let caughtError;
+    let caughtError
     try {
-      await executor.execute('test-workflow-id');
+      await executor.execute('test-workflow-id')
     } catch (error) {
-      caughtError = error;
+      caughtError = error
     }
     
-    expect(caughtError).toBeDefined();
-    expect(caughtError.message).toContain('API error: 500 Internal Server Error');
+    expect(caughtError).toBeDefined()
+    expect(caughtError.message).toContain('API error: 500 Internal Server Error')
   })
 
   test('should execute a workflow definition directly', async () => {

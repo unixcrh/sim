@@ -1,0 +1,200 @@
+---
+title: Execution
+description: Executing workflows with the Sim Studio SDK
+---
+
+# Executing Workflows
+
+The Sim Studio SDK provides several ways to execute workflows. This guide covers executing existing workflows, executing workflow definitions directly, and managing workflow execution.
+
+## Execute by ID
+
+If you already have a workflow saved in Sim Studio, you can execute it using its ID:
+
+```typescript
+import { SimStudio } from '@sim-studio/sdk';
+
+async function executeExistingWorkflow() {
+  const simStudio = new SimStudio({
+    apiKey: process.env.SIM_STUDIO_API_KEY,
+  });
+  
+  // Execute a workflow by its ID
+  const workflowId = '1234abcd';
+  const input = {
+    topic: 'Artificial Intelligence Ethics',
+    length: 'medium',
+  };
+  
+  const result = await simStudio.execute(workflowId, input);
+  
+  if (result.success) {
+    console.log('Execution successful!');
+    console.log('Output:', result.output);
+  } else {
+    console.error('Execution failed:', result.error);
+  }
+  
+  return result;
+}
+```
+
+## Execute Workflow Definition
+
+You can also directly execute a workflow definition without saving it first:
+
+```typescript
+import { SimStudio, AgentBlock } from '@sim-studio/sdk';
+
+async function executeWorkflowDefinition() {
+  const simStudio = new SimStudio({
+    apiKey: process.env.SIM_STUDIO_API_KEY,
+  });
+  
+  // Create a workflow
+  const builder = simStudio.createWorkflow('Temporary Workflow');
+  const starterBlock = builder.getStarterBlock();
+  
+  // Add an agent block
+  const agentBlock = new AgentBlock({
+    model: 'claude-3-haiku',
+    prompt: 'Summarize this in 3 bullet points: {{input.text}}',
+    temperature: 0.3,
+    apiKey: process.env.CLAUDE_API_KEY,
+  }).setName('Summarizer');
+  
+  // Add blocks and connections
+  builder.addBlock(agentBlock);
+  builder.connect(starterBlock.id, agentBlock.id);
+  
+  // Build the workflow
+  const workflow = builder.build();
+  
+  // Execute it directly
+  const result = await simStudio.executeWorkflow(workflow, {
+    text: 'The Industrial Revolution was a period of major industrialization and innovation...'
+  });
+  
+  return result;
+}
+```
+
+## Using the Executor Directly
+
+For more control over execution, you can use the `Executor` class directly:
+
+```typescript
+import { Executor, WorkflowBuilder, AgentBlock } from '@sim-studio/sdk';
+
+async function executeWithExecutor() {
+  // Create a workflow
+  const builder = new WorkflowBuilder('Test Workflow');
+  const starterBlock = builder.getStarterBlock();
+  
+  const agentBlock = new AgentBlock({
+    model: 'claude-3-haiku',
+    prompt: 'Hello {{input.name}}!',
+    apiKey: process.env.CLAUDE_API_KEY,
+  }).setName('Greeter');
+  
+  builder.addBlock(agentBlock);
+  builder.connect(starterBlock.id, agentBlock.id);
+  
+  const workflow = builder.build();
+  
+  // Create executor with specific config
+  const executor = new Executor({
+    apiKey: process.env.SIM_STUDIO_API_KEY,
+    timeout: 60000, // 60 seconds
+  });
+  
+  // Execute the workflow
+  const result = await executor.executeWorkflow(workflow, {
+    name: 'World'
+  });
+  
+  return result;
+}
+```
+
+## Handling Execution Results
+
+The execution result contains detailed information about the execution:
+
+```typescript
+interface ExecutionResult {
+  // Whether the execution was successful
+  success: boolean;
+  
+  // The output data from the workflow
+  output: {
+    response?: any;
+    [key: string]: any;
+  };
+  
+  // Error message if the execution failed
+  error?: string;
+  
+  // Execution logs
+  logs?: Array<{
+    level: string;
+    message: string;
+    timestamp: string;
+    blockId?: string;
+  }>;
+  
+  // Execution metadata
+  metadata?: {
+    startTime?: string;
+    endTime?: string;
+    duration?: number;
+  };
+}
+```
+
+## Error Handling
+
+It's important to handle errors that might occur during execution:
+
+```typescript
+try {
+  const result = await simStudio.execute(workflowId, input);
+  // Process successful result
+} catch (error) {
+  if (error.status) {
+    // API errors with status codes
+    console.error(`API Error (${error.status}):`, error.message);
+    
+    if (error.status === 401) {
+      console.error('Authentication failed. Check your API key.');
+    } else if (error.status === 404) {
+      console.error('Workflow not found. Check the workflow ID.');
+    } else if (error.status === 429) {
+      console.error('Rate limit exceeded. Please try again later.');
+    }
+  } else if (error.name === 'AbortError') {
+    console.error('Execution timed out. Consider increasing the timeout or optimizing your workflow.');
+  } else {
+    console.error('Execution error:', error.message);
+  }
+}
+```
+
+## Timeouts and Performance
+
+You can configure timeouts when initializing the SDK or Executor:
+
+```typescript
+const simStudio = new SimStudio({
+  apiKey: 'your-api-key',
+  timeout: 120000, // 2 minutes
+});
+
+// Or for the executor
+const executor = new Executor({
+  apiKey: 'your-api-key',
+  timeout: 120000,
+});
+```
+
+For complex workflows or when using large language models, consider increasing the timeout to avoid premature termination of the execution.

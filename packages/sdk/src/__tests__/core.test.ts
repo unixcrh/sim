@@ -231,12 +231,12 @@ describe('SimStudio SDK', () => {
         }
         
         try {
-          await sdk.saveWorkflow(workflowToSave);
+          await sdk.saveWorkflow(workflowToSave)
           // If we get here, the test should fail
-          expect('This should not be reached').toBe('The promise should have rejected');
+          expect('This should not be reached').toBe('The promise should have rejected')
         } catch (error) {
           // Successfully caught the error
-          expect(error.message).toContain('Invalid workflow data');
+          expect(error.message).toContain('Invalid workflow data')
           // Don't check specific error properties as they might vary
         }
       })
@@ -453,13 +453,13 @@ describe('SimStudio SDK', () => {
         
         // Use a try/catch to handle the rejection explicitly
         try {
-          await sdk.execute(workflowId);
+          await sdk.execute(workflowId)
           // If we get here, the test should fail
-          expect('This should not be reached').toBe('The promise should have rejected');
+          expect('This should not be reached').toBe('The promise should have rejected')
         } catch (error) {
           // Successfully caught the error
-          expect(error.message).toContain('API error: 403 Forbidden');
-          expect(error.status).toBe(403);
+          expect(error.message).toContain('API error: 403 Forbidden')
+          expect(error.status).toBe(403)
         }
       })
     })
@@ -519,7 +519,7 @@ describe('SimStudio SDK', () => {
       }).setName('Summarizer')
       
       const functionBlock = new FunctionBlock({
-        code: 'return { length: input.message.length };'
+        code: 'return { length: input.message.length }'
       }).setName('Response Length')
       
       // Add blocks and connections

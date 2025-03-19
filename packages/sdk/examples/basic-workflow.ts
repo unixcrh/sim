@@ -68,7 +68,7 @@ async function createBasicWorkflow() {
   // Execute the workflow
   try {
     const workflowId = '123456' // In a real scenario, this would be the ID returned from saveWorkflow
-    const result = await simStudio.executeWorkflow(workflowId, {
+    const result = await simStudio.execute(workflowId, {
       topic: 'The benefits of AI for content creation'
     })
     

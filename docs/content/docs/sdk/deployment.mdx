@@ -1,0 +1,220 @@
+---
+title: Deployment & Scheduling
+description: Deploying and scheduling workflows with the SDK
+---
+
+# Deployment & Scheduling
+
+The Sim Studio SDK allows you to deploy workflows as API endpoints and schedule them to run automatically at specific times. This guide covers how to use these features programmatically.
+
+## Deploying Workflows
+
+Deploying a workflow creates an API endpoint that you can call from your applications. This is ideal for integrating Sim Studio workflows into your production systems.
+
+### Basic Deployment
+
+```typescript
+import { SimStudio } from '@sim-studio/sdk';
+
+async function deployWorkflow() {
+  const simStudio = new SimStudio({
+    apiKey: process.env.SIM_STUDIO_API_KEY,
+  });
+  
+  // Deploy a workflow by ID
+  const workflowId = '1234abcd';
+  const deployment = await simStudio.deployWorkflow(workflowId);
+  
+  console.log(`Workflow deployed successfully!`);
+  console.log(`Endpoint URL: ${deployment.url}`);
+  
+  return deployment;
+}
+```
+
+### Deployment Options
+
+You can customize your deployment with various options:
+
+```typescript
+const deploymentOptions = {
+  isPublic: true, // Make the endpoint publicly accessible
+  authentication: 'api_key', // 'none', 'api_key', or 'jwt'
+  rateLimit: 100, // Requests per minute
+};
+
+const deployment = await simStudio.deployWorkflow(workflowId, deploymentOptions);
+```
+
+### Managing Deployments
+
+The SDK also provides methods to manage existing deployments:
+
+```typescript
+// Get deployment details
+const deployment = await simStudio.getDeployment(workflowId);
+
+// Remove a deployment
+await simStudio.undeployWorkflow(workflowId);
+```
+
+## Scheduling Workflows
+
+Scheduling allows workflows to run automatically at specified intervals using cron expressions.
+
+### Creating a Schedule
+
+```typescript
+import { SimStudio } from '@sim-studio/sdk';
+
+async function scheduleWorkflow() {
+  const simStudio = new SimStudio({
+    apiKey: process.env.SIM_STUDIO_API_KEY,
+  });
+  
+  // Schedule a workflow by ID
+  const workflowId = '1234abcd';
+  
+  const scheduleOptions = {
+    cron: '0 9 * * 1-5', // Run at 9 AM on weekdays
+    timezone: 'America/New_York',
+    input: {
+      // Input data to pass to the workflow
+      topic: 'Daily Market Analysis',
+      format: 'summary',
+    },
+    active: true, // Enable the schedule immediately
+  };
+  
+  const schedule = await simStudio.scheduleWorkflow(workflowId, scheduleOptions);
+  
+  console.log(`Workflow scheduled successfully!`);
+  console.log(`Schedule ID: ${schedule.id}`);
+  console.log(`Next run at: ${schedule.nextRunAt}`);
+  
+  return schedule;
+}
+```
+
+### Cron Expression Syntax
+
+The `cron` parameter uses standard cron syntax:
+
+```
+┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of the month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of the week (0 - 6) (Sunday to Saturday)
+│ │ │ │ │
+│ │ │ │ │
+* * * * *
+```
+
+Common cron expressions:
+- `0 * * * *` - Every hour at minute 0
+- `0 9 * * 1-5` - Every weekday at 9 AM
+- `0 0 * * *` - Every day at midnight
+- `*/15 * * * *` - Every 15 minutes
+
+### Managing Schedules
+
+You can also manage existing schedules:
+
+```typescript
+// Get a specific schedule by ID
+const schedule = await simStudio.getSchedule(scheduleId);
+
+// List all schedules for a workflow
+const schedules = await simStudio.listSchedules(workflowId);
+
+// Delete a schedule
+await simStudio.deleteSchedule(scheduleId);
+```
+
+## Practical Example: Automated Report Generation
+
+Here's a complete example that creates, deploys, and schedules a weekly report generation workflow:
+
+```typescript
+import { SimStudio, AgentBlock, FunctionBlock } from '@sim-studio/sdk';
+
+async function setupReportingWorkflow() {
+  const simStudio = new SimStudio({
+    apiKey: process.env.SIM_STUDIO_API_KEY,
+  });
+  
+  // Create a workflow for generating reports
+  const builder = simStudio.createWorkflow(
+    'Weekly Report Generator',
+    'Automatically generates weekly summary reports'
+  );
+  
+  // Add an agent block to generate the report
+  const reportBlock = new AgentBlock({
+    model: 'claude-3-sonnet',
+    prompt: 'Generate a weekly report for {{input.department}} covering {{input.startDate}} to {{input.endDate}}',
+    systemPrompt: 'You are a professional report writer. Create concise, data-driven reports with key insights.',
+    temperature: 0.2,
+    apiKey: process.env.CLAUDE_API_KEY,
+  }).setName('Report Generator');
+  
+  // Add a formatter block
+  const formatterBlock = new FunctionBlock({
+    code: `
+      function formatReport(input) {
+        return {
+          title: \`Weekly Report: \${input.department} (\${input.startDate} - \${input.endDate})\`,
+          content: input.response,
+          timestamp: new Date().toISOString(),
+          department: input.department
+        };
+      }
+    `,
+  }).setName('Report Formatter');
+  
+  // Add blocks to workflow
+  builder.addBlock(reportBlock);
+  builder.addBlock(formatterBlock);
+  
+  // Connect blocks
+  const starterBlock = builder.getStarterBlock();
+  builder.connect(starterBlock.id, reportBlock.id);
+  builder.connect(reportBlock.id, formatterBlock.id);
+  
+  // Build and save the workflow
+  const workflow = builder.build();
+  const savedWorkflow = await simStudio.saveWorkflow(workflow);
+  
+  console.log(`Workflow created with ID: ${savedWorkflow.id}`);
+  
+  // Deploy the workflow
+  const deployment = await simStudio.deployWorkflow(savedWorkflow.id, {
+    isPublic: false,
+    authentication: 'api_key',
+  });
+  
+  console.log(`Workflow deployed at: ${deployment.url}`);
+  
+  // Schedule the workflow to run every Monday at 7 AM
+  const schedule = await simStudio.scheduleWorkflow(savedWorkflow.id, {
+    cron: '0 7 * * 1', // Every Monday at 7 AM
+    timezone: 'America/New_York',
+    input: {
+      department: 'Marketing',
+      startDate: '{{AUTO_DATE_MINUS_7_DAYS}}',
+      endDate: '{{AUTO_DATE_MINUS_1_DAY}}',
+    },
+  });
+  
+  console.log(`Workflow scheduled. Next run: ${schedule.nextRunAt}`);
+  
+  return {
+    workflow: savedWorkflow,
+    deployment,
+    schedule,
+  };
+}
+```
+
+In this example, we create a workflow that generates weekly reports, deploy it as a private API endpoint, and schedule it to run every Monday morning.

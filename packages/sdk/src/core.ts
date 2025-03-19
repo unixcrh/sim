@@ -282,7 +282,7 @@ export class SimStudio {
   }
 
   /**
-   * Get common headers for API requests
+   * Get headers for API requests
    */
   private getHeaders(): Record<string, string> {
     return {

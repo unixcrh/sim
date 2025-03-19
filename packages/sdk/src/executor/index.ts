@@ -11,6 +11,8 @@ export class Executor {
 
   /**
    * Create a new Executor instance
+   * @param config Configuration for the executor
+   * @throws Error if no API key is provided
    */
   constructor(
     config: {
@@ -19,6 +21,10 @@ export class Executor {
       timeout?: number
     }
   ) {
+    if (!config.apiKey) {
+      throw new Error('API key is required for workflow execution')
+    }
+    
     this.apiKey = config.apiKey
     this.baseUrl = config.baseUrl || 'https://simstudio.ai'
     this.timeout = config.timeout || 30000
@@ -46,8 +52,8 @@ export class Executor {
           errorData = await response.json()
         } catch (e) {
           // If we can't parse JSON, just throw the regular error
-          await this.checkResponse(response); // This will throw
-          throw new Error('Failed to execute workflow'); // Fallback, should not reach here
+          await this.checkResponse(response) // This will throw
+          throw new Error('Failed to execute workflow') // Fallback, should not reach here
         }
         
         // If we have execution data in the error response, return it as a failed execution result
@@ -66,10 +72,10 @@ export class Executor {
         }
         
         // If no execution data, throw the regular error
-        const error: any = new Error(`API error: ${response.status} ${response.statusText}`);
-        error.status = response.status;
-        error.apiResponse = errorData;
-        throw error;
+        const error: any = new Error(`API error: ${response.status} ${response.statusText}`)
+        error.status = response.status
+        error.apiResponse = errorData
+        throw error
       }
       
       const result = await response.json()
@@ -88,7 +94,7 @@ export class Executor {
     } catch (error: any) {
       // If the error has already been processed and formatted, just throw it
       if (error.status && error.apiResponse) {
-        throw error;
+        throw error
       }
       
       // Otherwise handle generic errors

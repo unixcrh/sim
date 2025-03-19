@@ -132,10 +132,15 @@ async function createAndDeployWorkflow() {
     enabled: true,
   })
 
-  // Execute the workflow with sample input
-  const result = await simStudio.executeWorkflow(workflow.id, {
-    message: "I haven't received my order yet and it's been 2 weeks. Can you help me track my package?"
-  })
+  // Execute the workflow
+  let result = null
+  if (workflow.id) {
+    const executionInput = {
+      topic: 'AI and Machine Learning'
+    }
+    
+    result = await simStudio.execute(workflow.id, executionInput)
+  }
 
   return {
     workflowId: workflow.id,

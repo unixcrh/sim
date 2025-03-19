@@ -53,7 +53,7 @@ describe('Direct Workflow Execution', () => {
             blocks: [
               { id: 'starter-1', type: 'starter' },
               { id: 'agent-1', type: 'agent', data: { model: 'gpt-4' } },
-              { id: 'function-1', type: 'function', data: { code: 'return { result: input.message.length };' } }
+              { id: 'function-1', type: 'function', data: { code: 'return { result: input.message.length }' } }
             ],
             edges: [
               { source: 'starter-1', target: 'agent-1' },
@@ -125,7 +125,7 @@ describe('Direct Workflow Execution', () => {
     }).setName('Analyzer')
     
     const functionBlock = new FunctionBlock({
-      code: 'return { result: input.message.length };'
+      code: 'return { result: input.message.length }'
     }).setName('Result Processor')
     
     builder.addBlock(agentBlock)
