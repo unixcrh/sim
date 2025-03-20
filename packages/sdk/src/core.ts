@@ -39,7 +39,17 @@ export class SimStudio {
       
       this.checkResponse(response)
       const data = await response.json()
-      return data.workflow
+      
+      // Transform from API format to SDK format
+      return {
+        id: data.workflow.id,
+        name: data.workflow.name,
+        description: data.workflow.description || '',
+        blocks: data.workflow.state.blocks,
+        connections: data.workflow.state.edges,
+        loops: data.workflow.state.loops || {},
+        metadata: data.workflow.metadata || {},
+      }
     } catch (error: any) {
       throw this.handleApiError(error, 'Failed to retrieve workflow')
     }
@@ -57,13 +67,31 @@ export class SimStudio {
       
       const query = queryParams.toString() ? `?${queryParams.toString()}` : ''
       
-      const response = await this.fetchWithTimeout(`${this.config.baseUrl}/api/workflows${query}`, {
+      const response = await this.fetchWithTimeout(`${this.config.baseUrl}/api/db/workflow${query}`, {
         headers: this.getHeaders(),
       })
       
       this.checkResponse(response)
       const data = await response.json()
-      return data.workflows
+      
+      // Transform data format if needed
+      const workflows = data.data ? data.data : data.workflows || []
+      
+      // Map to the format expected by the SDK
+      return workflows.map((wf: any) => ({
+        id: wf.id,
+        name: wf.name,
+        description: wf.description || '',
+        blocks: wf.state?.blocks || {},
+        connections: wf.state?.edges || [],
+        loops: wf.state?.loops || {},
+        metadata: {
+          color: wf.color,
+          createdAt: wf.createdAt,
+          updatedAt: wf.updatedAt,
+          ...wf.metadata
+        }
+      }))
     } catch (error: any) {
       throw this.handleApiError(error, 'Failed to list workflows')
     }
@@ -74,48 +102,58 @@ export class SimStudio {
    */
   async saveWorkflow(workflow: Workflow): Promise<Workflow> {
     try {
-      let response: Response
+      // The primary endpoint for saving workflows
+      const url = `${this.config.baseUrl}/api/db/workflow`
       
-      const payload = {
-        name: workflow.name,
-        description: workflow.description,
-        state: {
-          blocks: workflow.blocks,
-          edges: workflow.connections,
-          loops: workflow.loops || {},
-        },
-        metadata: workflow.metadata,
+      console.log(`Saving workflow to: ${url}`)
+      
+      // Create the payload that matches the platform's expected format
+      const workflowPayload = {
+        workflows: {
+          [workflow.id || crypto.randomUUID()]: {
+            id: workflow.id || crypto.randomUUID(),
+            name: workflow.name,
+            description: workflow.description || '',
+            color: workflow.metadata?.color || '#3972F6',
+            state: {
+              blocks: workflow.blocks,
+              edges: workflow.connections,
+              loops: workflow.loops || {},
+              lastSaved: Date.now(),
+            }
+          }
+        }
       }
       
-      if (workflow.id) {
-        // Update existing workflow
-        response = await this.fetchWithTimeout(`${this.config.baseUrl}/api/workflow/${workflow.id}`, {
-          method: 'PUT',
-          headers: this.getHeaders(),
-          body: JSON.stringify(payload),
-        })
-      } else {
-        // Create new workflow
-        response = await this.fetchWithTimeout(`${this.config.baseUrl}/api/workflows`, {
-          method: 'POST',
-          headers: this.getHeaders(),
-          body: JSON.stringify(payload),
-        })
-      }
+      // Log the payload for debugging
+      console.log(`Sending payload with ${Object.keys(workflowPayload.workflows).length} workflows`)
+      
+      // Send the request to the API
+      const response = await this.fetchWithTimeout(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(workflowPayload),
+      })
+      
+      // Log response status
+      console.log(`Response status: ${response.status} ${response.statusText}`)
       
       await this.checkResponse(response)
-      const data = await response.json()
       
-      return {
-        id: data.workflow.id,
-        name: data.workflow.name,
-        description: data.workflow.description,
-        blocks: data.workflow.state.blocks,
-        connections: data.workflow.state.edges,
-        loops: data.workflow.state.loops,
-        metadata: data.workflow.metadata,
-      }
+      // After successful save, get the workflow details to return
+      const savedWorkflowId = Object.keys(workflowPayload.workflows)[0]
+      console.log(`Workflow saved successfully with ID: ${savedWorkflowId}`)
+      
+      // Fetch the workflow to get the latest state
+      const savedWorkflow = await this.getWorkflow(savedWorkflowId)
+      
+      return savedWorkflow
     } catch (error: any) {
+      console.error(`Error saving workflow: ${error.message}`)
+      if (error.response) {
+        console.error(`Response status: ${error.response.status}`)
+        console.error(`Response data:`, error.response.data)
+      }
       throw this.handleApiError(error, 'Failed to save workflow')
     }
   }
@@ -219,10 +257,13 @@ export class SimStudio {
    */
   async scheduleWorkflow(workflowId: string, options: ScheduleOptions): Promise<ScheduleResult> {
     try {
-      const response = await this.fetchWithTimeout(`${this.config.baseUrl}/api/workflow/${workflowId}/schedule`, {
+      const response = await this.fetchWithTimeout(`${this.config.baseUrl}/api/scheduled/schedule`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(options),
+        body: JSON.stringify({
+          workflowId,
+          ...options
+        }),
       })
       
       this.checkResponse(response)
@@ -237,7 +278,7 @@ export class SimStudio {
    */
   async getSchedule(scheduleId: string): Promise<ScheduleResult> {
     try {
-      const response = await this.fetchWithTimeout(`${this.config.baseUrl}/api/schedules/${scheduleId}`, {
+      const response = await this.fetchWithTimeout(`${this.config.baseUrl}/api/scheduled/schedule/${scheduleId}`, {
         headers: this.getHeaders(),
       })
       

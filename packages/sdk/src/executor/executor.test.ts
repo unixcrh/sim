@@ -1,10 +1,13 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest'
-import { Executor } from '../executor'
+import { Executor } from '.'
 import { Workflow } from '../types'
 
 // Setup global fetch mock
 const originalFetch = global.fetch
 let mockFetch: any
+
+// Save original randomUUID
+const originalRandomUUID = crypto.randomUUID
 
 describe('Executor', () => {
   beforeEach(() => {
@@ -19,10 +22,14 @@ describe('Executor', () => {
       signal = {}
       abort = vi.fn()
     })
+    
+    // Mock crypto.randomUUID to return predictable IDs
+    crypto.randomUUID = vi.fn().mockReturnValue('new-workflow-id')
   })
   
   afterEach(() => {
     global.fetch = originalFetch
+    crypto.randomUUID = originalRandomUUID
     vi.unstubAllGlobals()
   })
 
@@ -183,30 +190,21 @@ describe('Executor', () => {
 
     // Verify custom config was used
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://custom-api.example.com/api/workflows',
+      'https://custom-api.example.com/api/db/workflow',
       expect.objectContaining({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer test-api-key',
         },
-        body: JSON.stringify({
-          name: 'Test Workflow',
-          description: 'A test workflow',
-          state: {
-            blocks: [
-              { id: 'block1', type: 'starter', data: {} },
-              { id: 'block2', type: 'agent', data: { model: 'gpt-4' } }
-            ],
-            edges: [
-              { source: 'block1', target: 'block2' }
-            ],
-            loops: {}
-          },
-          metadata: undefined
-        })
+        body: expect.any(String)
       })
     )
+    
+    // Verify the workflow payload format
+    const savePayload = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(savePayload).toHaveProperty('workflows');
+    expect(Object.keys(savePayload.workflows).length).toBe(1);
 
     // Verify workflow was executed with the given input
     expect(mockFetch.mock.calls[1][0]).toBe('https://custom-api.example.com/api/workflow/new-workflow-id/execute')

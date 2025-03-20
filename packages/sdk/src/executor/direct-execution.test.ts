@@ -9,6 +9,9 @@ import { Workflow } from '../types'
 const originalFetch = global.fetch
 let mockFetch: any
 
+// Save original randomUUID
+const originalRandomUUID = crypto.randomUUID
+
 /**
  * Tests that directly simulate how the platform executes workflows
  * to ensure the SDK works the same way as the platform
@@ -27,10 +30,14 @@ describe('Direct Workflow Execution', () => {
       signal = {}
       abort = vi.fn()
     })
+    
+    // Mock crypto.randomUUID to return predictable IDs
+    crypto.randomUUID = vi.fn().mockReturnValue('new-workflow-id')
   })
   
   afterEach(() => {
     global.fetch = originalFetch
+    crypto.randomUUID = originalRandomUUID
     vi.unstubAllGlobals()
   })
 
@@ -145,17 +152,18 @@ describe('Direct Workflow Execution', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2)
     
     // First call should save the workflow
-    expect(mockFetch.mock.calls[0][0]).toBe('https://test-api.com/api/workflows')
-    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({
-      name: 'Test End-to-End Workflow',
-      description: 'A workflow to test end-to-end execution',
-      state: {
-        blocks: expect.any(Array),
-        edges: expect.any(Array),
-        loops: {}
-      },
-      metadata: undefined
-    })
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test-api.com/api/db/workflow')
+    expect(mockFetch.mock.calls[0][1].body).toBeTruthy()
+    const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(payload).toHaveProperty('workflows');
+    expect(Object.keys(payload.workflows).length).toBe(1);
+    const workflowData = Object.values(payload.workflows)[0] as Record<string, any>;
+    expect(workflowData).toHaveProperty('name', 'Test End-to-End Workflow');
+    expect(workflowData).toHaveProperty('description', 'A workflow to test end-to-end execution');
+    expect(workflowData).toHaveProperty('state');
+    expect(workflowData.state).toHaveProperty('blocks');
+    expect(workflowData.state).toHaveProperty('edges');
+    expect(workflowData.state).toHaveProperty('loops', {});
     
     // Second call should execute the workflow
     expect(mockFetch.mock.calls[1][0]).toBe('https://test-api.com/api/workflow/new-workflow-id/execute')
@@ -257,7 +265,7 @@ describe('Direct Workflow Execution', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2)
     
     // First call should save the workflow
-    expect(mockFetch.mock.calls[0][0]).toBe('https://test-api.com/api/workflows')
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test-api.com/api/db/workflow')
     
     // Second call should execute the workflow
     expect(mockFetch.mock.calls[1][0]).toBe('https://test-api.com/api/workflow/new-workflow-id/execute')

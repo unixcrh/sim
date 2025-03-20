@@ -1,15 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { SimStudio } from '../core'
-import { AgentBlock } from '../blocks/agent'
-import { FunctionBlock } from '../blocks/function'
-import { StarterBlock } from '../blocks/starter'
+import { SimStudio } from './core'
+import { AgentBlock } from './blocks/agent'
+import { FunctionBlock } from './blocks/function'
+import { StarterBlock } from './blocks/starter'
+import { Workflow } from './types'
 
-// Setup global fetch mock
+// Mock fetch for all tests
 const originalFetch = global.fetch
 let mockFetch: any
 
+// Save original randomUUID
+const originalRandomUUID = crypto.randomUUID
+
+// Save original environment variables
+const originalEnv = { ...process.env }
+
 describe('SimStudio SDK', () => {
-  // Reset mocks between tests
   beforeEach(() => {
     vi.clearAllMocks()
     
@@ -22,20 +28,33 @@ describe('SimStudio SDK', () => {
       signal = {}
       abort = vi.fn()
     })
+    
+    // Mock crypto.randomUUID to return predictable IDs
+    crypto.randomUUID = vi.fn().mockReturnValue('dbe907b6-b1a1-4b3b-9cfb-d9ec9b08fc99')
+    
+    // Reset environment variables for each test
+    delete process.env.SIM_STUDIO_API_KEY
+    delete process.env.SIM_STUDIO_API_URL
   })
   
   afterEach(() => {
+    // Restore original implementations
     global.fetch = originalFetch
+    crypto.randomUUID = originalRandomUUID
     vi.unstubAllGlobals()
+    
+    // Restore original environment variables
+    process.env = { ...originalEnv }
   })
 
   describe('constructor', () => {
     test('should initialize with default values when no config is provided', () => {
+      // Set environment variables for this test
       process.env.SIM_STUDIO_API_KEY = 'test-key-from-env'
+      process.env.SIM_STUDIO_API_URL = 'https://simstudio.ai'
+      
       const sdk = new SimStudio()
       
-      // There's no direct way to test this without triggering an API call
-      // We'll verify the defaults by making an API call and inspecting the fetch arguments
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ workflows: [] })
@@ -43,7 +62,7 @@ describe('SimStudio SDK', () => {
       
       return sdk.listWorkflows().then(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          'https://simstudio.ai/api/workflows',
+          'https://simstudio.ai/api/db/workflow',
           expect.objectContaining({
             headers: {
               'Content-Type': 'application/json',
@@ -68,7 +87,7 @@ describe('SimStudio SDK', () => {
       
       return sdk.listWorkflows().then(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          'https://test-url.com/api/workflows',
+          'https://test-url.com/api/db/workflow',
           expect.objectContaining({
             headers: {
               'Content-Type': 'application/json',
@@ -84,7 +103,7 @@ describe('SimStudio SDK', () => {
     let sdk: SimStudio
     
     beforeEach(() => {
-      sdk = new SimStudio({ apiKey: 'test-api-key' })
+      sdk = new SimStudio({ apiKey: 'test-api-key', baseUrl: 'https://simstudio.ai' })
     })
     
     describe('saveWorkflow', () => {
@@ -94,7 +113,25 @@ describe('SimStudio SDK', () => {
           ok: true,
           json: async () => ({
             workflow: {
-              id: 'new-workflow-id',
+              id: 'dbe907b6-b1a1-4b3b-9cfb-d9ec9b08fc99',
+              name: 'Test Workflow',
+              description: 'A test workflow',
+              state: {
+                blocks: [{ id: 'block1', type: 'starter' }],
+                edges: [{ source: 'block1', target: 'block2' }],
+                loops: {}
+              },
+              metadata: { author: 'Test User' }
+            }
+          })
+        })
+        
+        // Mock the getWorkflow call that happens after successful save
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            workflow: {
+              id: 'dbe907b6-b1a1-4b3b-9cfb-d9ec9b08fc99',
               name: 'Test Workflow',
               description: 'A test workflow',
               state: {
@@ -117,29 +154,25 @@ describe('SimStudio SDK', () => {
         
         const result = await sdk.saveWorkflow(workflowToSave)
         
-        expect(mockFetch).toHaveBeenCalledWith(
-          'https://simstudio.ai/api/workflows',
-          expect.objectContaining({
-            method: 'POST',
-            headers: expect.objectContaining({
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer test-api-key'
-            }),
-            body: JSON.stringify({
-              name: 'Test Workflow',
-              description: 'A test workflow',
-              state: {
-                blocks: [{ id: 'block1', type: 'starter', data: {} }],
-                edges: [{ source: 'block1', target: 'block2' }],
-                loops: {}
-              },
-              metadata: { author: 'Test User' }
-            })
-          })
-        )
+        // Verify first call is to save workflow
+        expect(mockFetch.mock.calls[0][0]).toBe('https://simstudio.ai/api/db/workflow')
+        expect(mockFetch.mock.calls[0][1].method).toBe('POST')
+        expect(mockFetch.mock.calls[0][1].headers).toEqual(expect.objectContaining({
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-api-key'
+        }))
         
+        // Verify the payload format
+        const savePayload = JSON.parse(mockFetch.mock.calls[0][1].body)
+        expect(savePayload).toHaveProperty('workflows')
+        expect(Object.keys(savePayload.workflows).length).toBe(1)
+        
+        // Verify the second call is to get the workflow
+        expect(mockFetch.mock.calls[1][0]).toBe('https://simstudio.ai/api/workflow/dbe907b6-b1a1-4b3b-9cfb-d9ec9b08fc99')
+        
+        // Verify the result
         expect(result).toEqual({
-          id: 'new-workflow-id',
+          id: 'dbe907b6-b1a1-4b3b-9cfb-d9ec9b08fc99',
           name: 'Test Workflow',
           description: 'A test workflow',
           blocks: [{ id: 'block1', type: 'starter' }],
@@ -168,6 +201,24 @@ describe('SimStudio SDK', () => {
           })
         })
         
+        // Mock the getWorkflow call that happens after successful save
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            workflow: {
+              id: 'existing-workflow-id',
+              name: 'Updated Workflow',
+              description: 'An updated workflow',
+              state: {
+                blocks: [{ id: 'block1', type: 'starter' }],
+                edges: [{ source: 'block1', target: 'block3' }],
+                loops: {}
+              },
+              metadata: { author: 'Test User', updated: true }
+            }
+          })
+        })
+        
         const workflowToUpdate = {
           id: 'existing-workflow-id',
           name: 'Updated Workflow',
@@ -179,27 +230,20 @@ describe('SimStudio SDK', () => {
         
         const result = await sdk.saveWorkflow(workflowToUpdate)
         
-        expect(mockFetch).toHaveBeenCalledWith(
-          'https://simstudio.ai/api/workflow/existing-workflow-id',
-          expect.objectContaining({
-            method: 'PUT',
-            headers: expect.objectContaining({
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer test-api-key'
-            }),
-            body: JSON.stringify({
-              name: 'Updated Workflow',
-              description: 'An updated workflow',
-              state: {
-                blocks: [{ id: 'block1', type: 'starter', data: {} }],
-                edges: [{ source: 'block1', target: 'block3' }],
-                loops: {}
-              },
-              metadata: { author: 'Test User', updated: true }
-            })
-          })
-        )
+        // Verify first call is to save workflow
+        expect(mockFetch.mock.calls[0][0]).toBe('https://simstudio.ai/api/db/workflow')
+        expect(mockFetch.mock.calls[0][1].method).toBe('POST')
         
+        // Verify the payload format
+        const savePayload = JSON.parse(mockFetch.mock.calls[0][1].body)
+        expect(savePayload).toHaveProperty('workflows')
+        expect(Object.keys(savePayload.workflows).length).toBe(1)
+        expect(Object.keys(savePayload.workflows)[0]).toBe('existing-workflow-id')
+        
+        // Verify the second call is to get the workflow
+        expect(mockFetch.mock.calls[1][0]).toBe('https://simstudio.ai/api/workflow/existing-workflow-id')
+        
+        // Verify the result
         expect(result).toEqual({
           id: 'existing-workflow-id',
           name: 'Updated Workflow',
@@ -244,6 +288,8 @@ describe('SimStudio SDK', () => {
     
     describe('executeWorkflow', () => {
       test('should execute a workflow correctly', async () => {
+        const sdk = new SimStudio({ apiKey: 'test-api-key', baseUrl: 'https://simstudio.ai' })
+        
         // Mock response for executing a workflow
         mockFetch.mockResolvedValueOnce({
           ok: true,
@@ -319,6 +365,8 @@ describe('SimStudio SDK', () => {
       })
       
       test('should handle execution failure correctly', async () => {
+        const sdk = new SimStudio({ apiKey: 'test-api-key', baseUrl: 'https://simstudio.ai' })
+        
         // Mock a response where the execution is technically successful (HTTP 200)
         // but the workflow execution itself failed
         mockFetch.mockResolvedValueOnce({
@@ -467,14 +515,41 @@ describe('SimStudio SDK', () => {
   
   describe('WorkflowBuilder integration', () => {
     test('should build and execute a workflow correctly', async () => {
-      const sdk = new SimStudio({ apiKey: 'test-api-key' })
+      const sdk = new SimStudio({ apiKey: 'test-api-key', baseUrl: 'https://simstudio.ai' })
+      
+      // Override the randomUUID for this test
+      crypto.randomUUID = vi.fn().mockReturnValue('e6da2a53-b561-48c7-b23b-ec7bcb70ca7c')
       
       // Mock saving the workflow
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           workflow: {
-            id: 'new-workflow-id',
+            id: 'e6da2a53-b561-48c7-b23b-ec7bcb70ca7c',
+            name: 'Test Workflow',
+            description: 'A test workflow',
+            state: {
+              blocks: [
+                { id: 'starter-1', type: 'starter' },
+                { id: 'agent-1', type: 'agent' },
+                { id: 'function-1', type: 'function' }
+              ],
+              edges: [
+                { source: 'starter-1', target: 'agent-1' },
+                { source: 'agent-1', target: 'function-1' }
+              ],
+              loops: {}
+            }
+          }
+        })
+      })
+      
+      // Mock the getWorkflow call that happens after successful save
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          workflow: {
+            id: 'e6da2a53-b561-48c7-b23b-ec7bcb70ca7c',
             name: 'Test Workflow',
             description: 'A test workflow',
             state: {
@@ -538,7 +613,7 @@ describe('SimStudio SDK', () => {
       const result = await sdk.execute(savedWorkflow.id!, { text: 'This is a test' })
       
       // Verify the workflow was built and executed correctly
-      expect(savedWorkflow.id).toBe('new-workflow-id')
+      expect(savedWorkflow.id).toBe('e6da2a53-b561-48c7-b23b-ec7bcb70ca7c')
       expect(savedWorkflow.blocks.length).toBe(3)
       expect(savedWorkflow.connections.length).toBe(2)
       

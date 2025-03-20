@@ -111,35 +111,38 @@ export class Executor {
     input?: Record<string, any>
   ): Promise<ExecutionResult> {
     try {
-      // First, save the workflow
-      const payload = {
-        name: workflow.name,
-        description: workflow.description,
-        state: {
-          blocks: workflow.blocks,
-          edges: workflow.connections,
-          loops: workflow.loops || {},
-        },
-        metadata: workflow.metadata,
+      // Create a UUID for the workflow if it doesn't have one
+      const workflowId = workflow.id || crypto.randomUUID()
+      
+      // First, save the workflow using the correct payload format
+      const workflowPayload = {
+        workflows: {
+          [workflowId]: {
+            id: workflowId,
+            name: workflow.name,
+            description: workflow.description || '',
+            color: workflow.metadata?.color || '#3972F6',
+            state: {
+              blocks: workflow.blocks,
+              edges: workflow.connections,
+              loops: workflow.loops || {},
+              lastSaved: Date.now(),
+            }
+          }
+        }
       }
       
-      const saveResponse = await this.fetchWithTimeout(`${this.baseUrl}/api/workflows`, {
+      // Save to the correct endpoint
+      const saveResponse = await this.fetchWithTimeout(`${this.baseUrl}/api/db/workflow`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(workflowPayload),
       })
       
       await this.checkResponse(saveResponse)
-      const data = await saveResponse.json()
-      
-      if (!data.workflow || !data.workflow.id) {
-        throw new Error('Failed to save workflow: no workflow ID returned from API')
-      }
-      
-      const savedWorkflowId = data.workflow.id
       
       // Then execute it using the platform's execution endpoint
-      return this.execute(savedWorkflowId, input)
+      return this.execute(workflowId, input)
     } catch (error: any) {
       throw this.handleApiError(error, 'Failed to execute workflow')
     }

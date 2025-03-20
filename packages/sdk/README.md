@@ -201,6 +201,44 @@ The SDK includes several block types that you can use to build workflows:
 
 You can use environment variables in your workflows by using the `{{VARIABLE_NAME}}` syntax. These will be replaced with values from your Sim Studio environment settings at runtime.
 
+- `SIM_STUDIO_API_KEY`: Your API key for authenticating with Sim Studio
+- `SIM_STUDIO_API_URL`: Override the default API endpoint (defaults to https://simstudio.ai)
+
+## Testing
+
+The SDK includes both unit and integration tests.
+
+### Running Tests
+
+```bash
+# Run only unit tests (default behavior)
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run integration tests (requires API key)
+npm run test:integration
+```
+
+### Integration Tests
+
+Integration tests make actual API calls to the Sim Studio platform and require a valid API key set in the `.env` file:
+
+```
+SIM_STUDIO_API_KEY=your_api_key
+SIM_STUDIO_API_URL=https://simstudio.ai
+```
+
+These tests verify:
+- Workflow creation and management
+- Workflow execution
+- Advanced features like conditions and loops
+
+By default, integration tests are excluded from normal test runs to avoid failing CI/CD pipelines. Use the dedicated script to run them when needed.
+
+## Contributing
+
 ## Error Handling
 
 The SDK provides detailed error handling:
