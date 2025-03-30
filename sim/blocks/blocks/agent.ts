@@ -35,9 +35,9 @@ export const AgentBlock: BlockConfig<AgentResponse> = {
   icon: AgentIcon,
   subBlocks: [
     {
-      id: 'chatHistory',
-      title: 'Chat History',
-      type: 'chat-history',
+      id: 'messages',
+      title: 'Messages',
+      type: 'messages',
       layout: 'full',
       placeholder: 'Add messages to the chat history...',
     },

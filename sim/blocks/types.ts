@@ -12,7 +12,7 @@ export type BlockCategory = 'blocks' | 'tools'
 
 // SubBlock types
 export type SubBlockType =
-  | 'chat-history' // Chat history // just added it
+  | 'messages' // Chat history 
   | 'short-input' // Single line input
   | 'long-input' // Multi-line input
   | 'dropdown' // Select menu

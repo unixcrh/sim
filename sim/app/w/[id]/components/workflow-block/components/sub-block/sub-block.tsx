@@ -4,7 +4,6 @@ import { useSubBlockStore } from '@/stores/workflows/subblock/store'
 import { useWorkflowStore } from '@/stores/workflows/workflow/store'
 import { getBlock } from '@/blocks/index'
 import { SubBlockConfig } from '@/blocks/types'
-import { ChatHistory } from './components/chat-history'
 import { CheckboxList } from './components/checkbox-list'
 import { Code } from './components/code'
 import { ConditionInput } from './components/condition-input'
@@ -15,6 +14,7 @@ import { EvalInput } from './components/eval-input'
 import { FileSelectorInput } from './components/file-selector/file-selector-input'
 import { FolderSelectorInput } from './components/folder-selector/components/folder-selector-input'
 import { LongInput } from './components/long-input'
+import { Messages } from './components/messages'
 import { ScheduleConfig } from './components/schedule/schedule-config'
 import { ShortInput } from './components/short-input'
 import { SliderInput } from './components/slider-input'
@@ -49,8 +49,8 @@ export function SubBlock({ blockId, config, isConnecting }: SubBlockProps) {
 
   const renderInput = () => {
     switch (config.type) {
-      case 'chat-history':
-        return <ChatHistory blockId={blockId} subBlockId={config.id} />
+      case 'messages':
+        return <Messages blockId={blockId} subBlockId={config.id} />
       case 'short-input':
         return (
           <ShortInput
@@ -161,9 +161,9 @@ export function SubBlock({ blockId, config, isConnecting }: SubBlockProps) {
           />
         )
       case 'file-selector':
-        return <FileSelectorInput blockId={blockId} subBlock={config} disabled={isConnecting} /> 
+        return <FileSelectorInput blockId={blockId} subBlock={config} disabled={isConnecting} />
       case 'folder-selector':
-        return <FolderSelectorInput blockId={blockId} subBlock={config} disabled={isConnecting} /> 
+        return <FolderSelectorInput blockId={blockId} subBlock={config} disabled={isConnecting} />
       default:
         return null
     }
