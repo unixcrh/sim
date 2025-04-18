@@ -9,10 +9,10 @@ import { updateWorkflowRunCounts } from '@/lib/workflows/utils'
 import { mergeSubblockStateAsync } from '@/stores/workflows/utils'
 import { getOAuthToken } from '@/app/api/auth/oauth/utils'
 import { db } from '@/db'
-import { environment, userStats, webhook, workflow } from '@/db/schema'
+import { environment, userStats, webhook } from '@/db/schema'
 import { Executor } from '@/executor'
 import { Serializer } from '@/serializer'
-import { getRedisClient, hasProcessedMessage, markMessageAsProcessed, acquireLock } from '@/lib/redis'
+import { hasProcessedMessage, markMessageAsProcessed } from '@/lib/redis'
 
 const logger = createLogger('WebhookUtils')
 
@@ -641,6 +641,17 @@ export function verifyProviderWebhook(
       break // No specific auth here
     case 'stripe':
       break // Stripe verification would go here
+    case 'gmail':
+      // For Gmail, we verify using the webhook secret if one is provided
+      // The request is typically coming from our own polling service
+      if (providerConfig.secret) {
+        const secretHeader = request.headers.get('X-Webhook-Secret')
+        if (secretHeader !== providerConfig.secret) {
+          logger.warn(`[${requestId}] Invalid Gmail webhook secret`)
+          return new NextResponse('Unauthorized', { status: 401 })
+        }
+      }
+      break
     case 'generic':
       // Generic auth logic: requireAuth, token, secretHeaderName, allowedIps
       if (providerConfig.requireAuth) {
@@ -1245,4 +1256,66 @@ export interface AirtableChange {
   changeType: 'created' | 'updated'
   changedFields: Record<string, any> // { fieldId: newValue }
   previousFields?: Record<string, any> // { fieldId: previousValue } (optional)
+}
+
+/**
+ * Configure Gmail polling for a webhook
+ */
+export async function configureGmailPolling(
+  userId: string,
+  webhookData: any,
+  requestId: string
+): Promise<boolean> {
+  const logger = createLogger('GmailWebhookSetup')
+  logger.info(`[${requestId}] Setting up Gmail polling for webhook ${webhookData.id}`)
+  
+  try {
+    // Validate OAuth access by attempting to get a token
+    const accessToken = await getOAuthToken(userId, 'google-email')
+    if (!accessToken) {
+      logger.error(`[${requestId}] Failed to retrieve Gmail access token for user ${userId}`)
+      return false
+    }
+    
+    // Get existing webhook configuration or use defaults
+    const providerConfig = (webhookData.providerConfig as Record<string, any>) || {}
+    
+    // Convert string values to appropriate types
+    const maxEmailsPerPoll = typeof providerConfig.maxEmailsPerPoll === 'string' 
+      ? parseInt(providerConfig.maxEmailsPerPoll, 10) || 10
+      : (providerConfig.maxEmailsPerPoll || 10)
+    
+    const pollingInterval = typeof providerConfig.pollingInterval === 'string'
+      ? parseInt(providerConfig.pollingInterval, 10) || 5
+      : (providerConfig.pollingInterval || 5)
+    
+    // Set initial timestamp and store userId for later access during polling
+    const now = new Date()
+    
+    // Update the webhook configuration
+    await db
+      .update(webhook)
+      .set({
+        providerConfig: {
+          ...providerConfig,
+          userId, // Store user ID for OAuth access during polling
+          maxEmailsPerPoll,
+          pollingInterval,
+          lastCheckedTimestamp: now.toISOString(),
+          setupCompleted: true,
+        },
+        updatedAt: now,
+      })
+      .where(eq(webhook.id, webhookData.id))
+    
+    logger.info(`[${requestId}] Successfully configured Gmail polling for webhook ${webhookData.id}`)
+    return true
+  } catch (error: any) {
+    logger.error(`[${requestId}] Failed to configure Gmail polling`, {
+      webhookId: webhookData.id,
+      error: error.message,
+      stack: error.stack,
+    })
+    return false
+  }
 }

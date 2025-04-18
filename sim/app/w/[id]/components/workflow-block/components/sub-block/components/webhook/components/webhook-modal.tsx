@@ -15,6 +15,7 @@ import { AirtableConfig } from './providers/airtable-config'
 import { DiscordConfig } from './providers/discord-config'
 import { GenericConfig } from './providers/generic-config'
 import { GithubConfig } from './providers/github-config'
+import { GmailConfig } from './providers/gmail-config'
 import { SlackConfig } from './providers/slack-config'
 import { StripeConfig } from './providers/stripe-config'
 import { WhatsAppConfig } from './providers/whatsapp-config'
@@ -85,8 +86,11 @@ export function WebhookModal({
   const [airtableTableId, setAirtableTableId] = useState('')
   const [airtableIncludeCellValues, setAirtableIncludeCellValues] = useState(false)
 
-  // Original values to track changes
+  // State for storing initial values to detect changes
   const [originalValues, setOriginalValues] = useState({
+    webhookProvider,
+    webhookPath,
+    slackSigningSecret: '',
     whatsappVerificationToken: '',
     githubContentType: 'application/json',
     generalToken: '',
@@ -95,12 +99,25 @@ export function WebhookModal({
     allowedIps: '',
     discordWebhookName: '',
     discordAvatarUrl: '',
-    slackSigningSecret: '',
     airtableWebhookSecret: '',
     airtableBaseId: '',
     airtableTableId: '',
     airtableIncludeCellValues: false,
+    selectedLabels: ['INBOX'] as string[],
+    labelFilterBehavior: 'INCLUDE',
+    processIncomingEmails: true,
+    markAsRead: false,
+    maxEmailsPerPoll: 10,
+    pollingInterval: 5,
   })
+
+  // Gmail config state
+  const [selectedLabels, setSelectedLabels] = useState<string[]>(['INBOX'])
+  const [labelFilterBehavior, setLabelFilterBehavior] = useState<string>('INCLUDE')
+  const [processIncomingEmails, setProcessIncomingEmails] = useState<boolean>(true)
+  const [markAsRead, setMarkAsRead] = useState<boolean>(false)
+  const [maxEmailsPerPoll, setMaxEmailsPerPoll] = useState<number>(10)
+  const [pollingInterval, setPollingInterval] = useState<number>(5)
 
   // Get the current provider configuration
   const provider = WEBHOOK_PROVIDERS[webhookProvider] || WEBHOOK_PROVIDERS.generic
@@ -213,6 +230,37 @@ export function WebhookModal({
                   airtableTableId: tableIdVal,
                   airtableIncludeCellValues: includeCells,
                 }))
+              } else if (webhookProvider === 'gmail') {
+                const labelIds = config.labelIds || []
+                const labelFilterBehavior = config.labelFilterBehavior || 'INCLUDE'
+                const processIncomingEmails = config.processIncomingEmails !== false
+
+                setSelectedLabels(labelIds)
+                setLabelFilterBehavior(labelFilterBehavior)
+                setProcessIncomingEmails(processIncomingEmails)
+
+                setOriginalValues((prev) => ({
+                  ...prev,
+                  selectedLabels: labelIds,
+                  labelFilterBehavior,
+                  processIncomingEmails,
+                }))
+
+                // Set additional Gmail config options if they exist
+                if (config.markAsRead !== undefined) {
+                  setMarkAsRead(config.markAsRead)
+                  setOriginalValues(prev => ({...prev, markAsRead: config.markAsRead}))
+                }
+                
+                if (config.maxEmailsPerPoll !== undefined) {
+                  setMaxEmailsPerPoll(config.maxEmailsPerPoll)
+                  setOriginalValues(prev => ({...prev, maxEmailsPerPoll: config.maxEmailsPerPoll}))
+                }
+                
+                if (config.pollingInterval !== undefined) {
+                  setPollingInterval(config.pollingInterval)
+                  setOriginalValues(prev => ({...prev, pollingInterval: config.pollingInterval}))
+                }
               }
             }
           }
@@ -250,7 +298,14 @@ export function WebhookModal({
         (airtableWebhookSecret !== originalValues.airtableWebhookSecret ||
           airtableBaseId !== originalValues.airtableBaseId ||
           airtableTableId !== originalValues.airtableTableId ||
-          airtableIncludeCellValues !== originalValues.airtableIncludeCellValues))
+          airtableIncludeCellValues !== originalValues.airtableIncludeCellValues)) ||
+      (webhookProvider === 'gmail' &&
+        (selectedLabels.length !== originalValues.selectedLabels.length ||
+          labelFilterBehavior !== originalValues.labelFilterBehavior ||
+          processIncomingEmails !== originalValues.processIncomingEmails ||
+          markAsRead !== originalValues.markAsRead ||
+          maxEmailsPerPoll !== originalValues.maxEmailsPerPoll ||
+          pollingInterval !== originalValues.pollingInterval))
 
     setHasUnsavedChanges(hasChanges)
   }, [
@@ -269,6 +324,12 @@ export function WebhookModal({
     airtableBaseId,
     airtableTableId,
     airtableIncludeCellValues,
+    selectedLabels,
+    labelFilterBehavior,
+    processIncomingEmails,
+    markAsRead,
+    maxEmailsPerPoll,
+    pollingInterval,
   ])
 
   // Validate required fields for current provider
@@ -291,6 +352,9 @@ export function WebhookModal({
       case 'discord':
         isValid = discordWebhookName.trim() !== ''
         break
+      case 'gmail':
+        isValid = selectedLabels.length > 0
+        break
     }
     setIsCurrentConfigValid(isValid)
   }, [
@@ -299,6 +363,7 @@ export function WebhookModal({
     airtableTableId,
     slackSigningSecret,
     whatsappVerificationToken,
+    selectedLabels,
   ])
 
   // Use the provided path or generate a UUID-based path
@@ -331,6 +396,15 @@ export function WebhookModal({
         }
       case 'stripe':
         return {}
+      case 'gmail':
+        return {
+          labelIds: selectedLabels,
+          labelFilterBehavior,
+          processIncomingEmails,
+          markAsRead,
+          maxEmailsPerPoll,
+          pollingInterval,
+        }
       case 'generic':
         // Parse the allowed IPs into an array
         const parsedIps = allowedIps
@@ -387,6 +461,8 @@ export function WebhookModal({
 
         if (saveSuccessful) {
           setOriginalValues({
+            webhookProvider,
+            webhookPath,
             whatsappVerificationToken,
             githubContentType,
             generalToken,
@@ -400,6 +476,12 @@ export function WebhookModal({
             airtableBaseId,
             airtableTableId,
             airtableIncludeCellValues,
+            selectedLabels,
+            labelFilterBehavior,
+            processIncomingEmails,
+            markAsRead,
+            maxEmailsPerPoll,
+            pollingInterval,
           })
           setHasUnsavedChanges(false)
           setTestResult({
@@ -541,6 +623,29 @@ export function WebhookModal({
             copied={copied}
             copyToClipboard={copyToClipboard}
             testWebhook={testWebhook}
+          />
+        )
+      case 'gmail':
+        return (
+          <GmailConfig
+            selectedLabels={selectedLabels}
+            setSelectedLabels={setSelectedLabels}
+            labelFilterBehavior={labelFilterBehavior}
+            setLabelFilterBehavior={setLabelFilterBehavior}
+            processIncomingEmails={processIncomingEmails}
+            setProcessIncomingEmails={setProcessIncomingEmails}
+            isLoadingToken={isLoadingToken}
+            testResult={testResult}
+            copied={copied}
+            copyToClipboard={copyToClipboard}
+            testWebhook={testWebhook}
+            webhookUrl={webhookUrl}
+            markAsRead={markAsRead}
+            setMarkAsRead={setMarkAsRead}
+            maxEmailsPerPoll={maxEmailsPerPoll}
+            setMaxEmailsPerPoll={setMaxEmailsPerPoll}
+            pollingInterval={pollingInterval}
+            setPollingInterval={setPollingInterval}
           />
         )
       case 'discord':

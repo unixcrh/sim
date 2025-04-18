@@ -48,6 +48,7 @@ export const StarterBlock: BlockConfig<StarterBlockOutput> = {
       options: [
         { label: 'Slack', id: 'slack' },
         { label: 'Airtable', id: 'airtable' },
+        { label: 'Gmail', id: 'gmail' },
         { label: 'Generic', id: 'generic' },
         // { label: 'WhatsApp', id: 'whatsapp' },
         // { label: 'GitHub', id: 'github' },
