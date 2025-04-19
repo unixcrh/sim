@@ -1301,6 +1301,10 @@ export async function configureGmailPolling(
           userId, // Store user ID for OAuth access during polling
           maxEmailsPerPoll,
           pollingInterval,
+          processIncomingEmails: providerConfig.processIncomingEmails !== false, // Default to true
+          markAsRead: providerConfig.markAsRead || false,
+          labelIds: providerConfig.labelIds || ['INBOX'],
+          labelFilterBehavior: providerConfig.labelFilterBehavior || 'INCLUDE',
           lastCheckedTimestamp: now.toISOString(),
           setupCompleted: true,
         },
