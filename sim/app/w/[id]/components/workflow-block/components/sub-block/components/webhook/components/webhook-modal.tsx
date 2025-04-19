@@ -9,7 +9,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { createLogger } from '@/lib/logs/console-logger'
-import { cn } from '@/lib/utils'
 import { ProviderConfig, WEBHOOK_PROVIDERS } from '../webhook-config'
 import { AirtableConfig } from './providers/airtable-config'
 import { DiscordConfig } from './providers/discord-config'
@@ -107,8 +106,7 @@ export function WebhookModal({
     labelFilterBehavior: 'INCLUDE',
     processIncomingEmails: true,
     markAsRead: false,
-    maxEmailsPerPoll: 10,
-    pollingInterval: 5,
+    singleEmailMode: true,
   })
 
   // Gmail config state
@@ -116,8 +114,7 @@ export function WebhookModal({
   const [labelFilterBehavior, setLabelFilterBehavior] = useState<string>('INCLUDE')
   const [processIncomingEmails, setProcessIncomingEmails] = useState<boolean>(true)
   const [markAsRead, setMarkAsRead] = useState<boolean>(false)
-  const [maxEmailsPerPoll, setMaxEmailsPerPoll] = useState<number>(10)
-  const [pollingInterval, setPollingInterval] = useState<number>(5)
+  const [singleEmailMode, setSingleEmailMode] = useState<boolean>(true)
 
   // Get the current provider configuration
   const provider = WEBHOOK_PROVIDERS[webhookProvider] || WEBHOOK_PROVIDERS.generic
@@ -252,14 +249,9 @@ export function WebhookModal({
                   setOriginalValues(prev => ({...prev, markAsRead: config.markAsRead}))
                 }
                 
-                if (config.maxEmailsPerPoll !== undefined) {
-                  setMaxEmailsPerPoll(config.maxEmailsPerPoll)
-                  setOriginalValues(prev => ({...prev, maxEmailsPerPoll: config.maxEmailsPerPoll}))
-                }
-                
-                if (config.pollingInterval !== undefined) {
-                  setPollingInterval(config.pollingInterval)
-                  setOriginalValues(prev => ({...prev, pollingInterval: config.pollingInterval}))
+                if (config.singleEmailMode !== undefined) {
+                  setSingleEmailMode(config.singleEmailMode)
+                  setOriginalValues(prev => ({...prev, singleEmailMode: config.singleEmailMode}))
                 }
               }
             }
@@ -304,8 +296,7 @@ export function WebhookModal({
           labelFilterBehavior !== originalValues.labelFilterBehavior ||
           processIncomingEmails !== originalValues.processIncomingEmails ||
           markAsRead !== originalValues.markAsRead ||
-          maxEmailsPerPoll !== originalValues.maxEmailsPerPoll ||
-          pollingInterval !== originalValues.pollingInterval))
+          singleEmailMode !== originalValues.singleEmailMode))
 
     setHasUnsavedChanges(hasChanges)
   }, [
@@ -328,8 +319,7 @@ export function WebhookModal({
     labelFilterBehavior,
     processIncomingEmails,
     markAsRead,
-    maxEmailsPerPoll,
-    pollingInterval,
+    singleEmailMode,
   ])
 
   // Validate required fields for current provider
@@ -402,8 +392,8 @@ export function WebhookModal({
           labelFilterBehavior,
           processIncomingEmails,
           markAsRead,
-          maxEmailsPerPoll,
-          pollingInterval,
+          maxEmailsPerPoll: 100,
+          singleEmailMode,
         }
       case 'generic':
         // Parse the allowed IPs into an array
@@ -480,8 +470,7 @@ export function WebhookModal({
             labelFilterBehavior,
             processIncomingEmails,
             markAsRead,
-            maxEmailsPerPoll,
-            pollingInterval,
+            singleEmailMode,
           })
           setHasUnsavedChanges(false)
           setTestResult({
@@ -642,10 +631,8 @@ export function WebhookModal({
             webhookUrl={webhookUrl}
             markAsRead={markAsRead}
             setMarkAsRead={setMarkAsRead}
-            maxEmailsPerPoll={maxEmailsPerPoll}
-            setMaxEmailsPerPoll={setMaxEmailsPerPoll}
-            pollingInterval={pollingInterval}
-            setPollingInterval={setPollingInterval}
+            singleEmailMode={singleEmailMode}
+            setSingleEmailMode={setSingleEmailMode}
           />
         )
       case 'discord':
