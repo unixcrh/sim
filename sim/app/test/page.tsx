@@ -130,46 +130,77 @@ export default function Dashboard() {
     const notifications: ErrorNotification[] = []
     const totalErrors = 50
 
-    // Create a grid system for more deterministic placement
-    const rows = 10
-    const columns = 10
-    const marginTop = 10 // Percentage from top
-    const marginLeft = 10 // Percentage from left
-    const availableHeight = 80 // 100 - 2*marginTop
-    const availableWidth = 80 // 100 - 2*marginLeft
-
-    // Cell dimensions
-    const cellHeight = availableHeight / rows
-    const cellWidth = availableWidth / columns
-
-    // Generate errors in a grid pattern with slight randomization for natural appearance
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < columns; c++) {
-        // Only create up to totalErrors
-        const index = r * columns + c
-        if (index >= totalErrors) break
-
-        // Calculate position with small offset for less rigid appearance
-        // We'll use a deterministic offset based on the index
-        const rowOffset = ((index * 17) % 10) / 10 // Deterministic offset between 0-1
-        const colOffset = ((index * 23) % 10) / 10 // Different prime for column offset
-
-        const top = `${marginTop + (r + rowOffset) * cellHeight}vh`
-        const left = `${marginLeft + (c + colOffset) * cellWidth}vw`
-
-        notifications.push({
-          id: `error-${index}`,
-          message: errorMessages[index % errorMessages.length],
-          position: {
-            top,
-            left,
-          },
-          visible: false,
-        })
+    // Use a seed-based approach for deterministic randomization
+    const seedBasedRandom = (seed: number) => {
+      // Simple deterministic pseudo-random number generator
+      const a = 1664525
+      const c = 1013904223
+      const m = Math.pow(2, 32)
+      let val = seed
+      return () => {
+        val = (a * val + c) % m
+        return val / m
       }
     }
 
-    // Reserve the first notification for the main error (will be positioned center later)
+    // Generate errors with better distribution across the entire screen
+    for (let i = 0; i < totalErrors; i++) {
+      // Create a random generator seeded with the error index
+      const rng = seedBasedRandom(i * 123456789)
+
+      // Divide screen into 4 quadrants to ensure coverage
+      // Each quadrant gets approximately equal number of errors
+      const quadrant = i % 4
+
+      // Calculate base position ranges for this quadrant
+      let topMin = 0,
+        topMax = 0,
+        leftMin = 0,
+        leftMax = 0
+
+      switch (quadrant) {
+        case 0: // Top-left
+          topMin = 0
+          topMax = 50
+          leftMin = 0
+          leftMax = 50
+          break
+        case 1: // Top-right
+          topMin = 0
+          topMax = 50
+          leftMin = 50
+          leftMax = 100
+          break
+        case 2: // Bottom-left
+          topMin = 50
+          topMax = 100
+          leftMin = 0
+          leftMax = 50
+          break
+        case 3: // Bottom-right
+          topMin = 50
+          topMax = 100
+          leftMin = 50
+          leftMax = 100
+          break
+      }
+
+      // Add randomization within the quadrant
+      const top = `${topMin + (topMax - topMin) * rng()}vh`
+      const left = `${leftMin + (leftMax - leftMin) * rng()}vw`
+
+      notifications.push({
+        id: `error-${i}`,
+        message: errorMessages[i % errorMessages.length],
+        position: {
+          top,
+          left,
+        },
+        visible: false,
+      })
+    }
+
+    // Reserve the first notification for the main error (will be positioned center)
     if (notifications.length > 0) {
       notifications[0] = {
         ...notifications[0],
@@ -205,87 +236,95 @@ export default function Dashboard() {
             return {
               ...err,
               visible: true,
-              message: 'Error!',
-              position: {
-                // Center it in the viewport
-                top: '50vh',
-                left: '50vw',
-              },
             }
           }
           return err
         })
       })
 
-      // Start showing error notifications with cascading pattern
-      // The notifications will appear in different parts of the screen,
-      // starting from corners then moving inward
-      const showSequence = [
-        [0, 1], // Top left quadrant first
-        [2, 3], // Top right quadrant second
-        [4, 5], // Bottom left third
-        [6, 7], // Bottom right fourth
-        [8, 9, 10, 11], // Then middle areas
-        [12, 13, 14, 15, 16, 17, 18, 19], // Then more errors
-        // ... and so on with the remaining errors
-      ]
+      // Create a distributed sequence for showing errors
+      // This maps grid positions to their display order
+      const createDisplaySequence = () => {
+        // Skip index 0 (that's the main error)
+        let sequence: number[] = []
 
-      let delayBase = 500
-      showSequence.forEach((group, groupIndex) => {
-        group.forEach((indexInZone, posInGroup) => {
-          // Calculate actual index in the full notifications array
-          // Each zone has errorsPerZone items
-          const errorsPerZone = Math.floor(notifications.length / 8)
-          const actualIndex = Math.floor(indexInZone / 2) * errorsPerZone + (indexInZone % 2) + 1 // +1 to skip main error
+        // Define screen regions
+        type Region = {
+          name: string
+          indices: number[]
+        }
 
-          if (actualIndex < notifications.length) {
-            const delay = delayBase + groupIndex * 300 + posInGroup * 150
+        const regions: Region[] = [
+          { name: 'top', indices: [] },
+          { name: 'bottom-right', indices: [] },
+          { name: 'bottom-left', indices: [] },
+          { name: 'top-right', indices: [] },
+          { name: 'top-left', indices: [] },
+          { name: 'center', indices: [] },
+          { name: 'middle-left', indices: [] },
+          { name: 'middle-right', indices: [] },
+        ]
 
-            setTimeout(() => {
-              setErrorNotifications((prev) => {
-                return prev.map((err, i) => {
-                  if (i === actualIndex) {
-                    return { ...err, visible: true }
-                  }
-                  return err
-                })
-              })
-            }, delay)
+        // Classify each error position into a region
+        for (let i = 1; i < notifications.length; i++) {
+          const position = notifications[i].position
+          // Convert position strings to numbers for comparison
+          const top = parseFloat(position.top)
+          const left = parseFloat(position.left)
+
+          if (top < 30) {
+            if (left < 30)
+              regions[4].indices.push(i) // top-left
+            else if (left > 70)
+              regions[3].indices.push(i) // top-right
+            else regions[0].indices.push(i) // top
+          } else if (top > 70) {
+            if (left < 30)
+              regions[2].indices.push(i) // bottom-left
+            else if (left > 70)
+              regions[1].indices.push(i) // bottom-right
+            else regions[5].indices.push(i) // center-bottom (part of center)
+          } else {
+            if (left < 30)
+              regions[6].indices.push(i) // middle-left
+            else if (left > 70)
+              regions[7].indices.push(i) // middle-right
+            else regions[5].indices.push(i) // center
           }
-        })
-      })
+        }
 
-      // Show all remaining errors with staggered timing
-      setTimeout(() => {
-        notifications.forEach((notification, index) => {
-          if (index === 0) return // Skip the main error
+        // Create a rotating sequence through regions
+        const maxErrorsPerRegion = Math.ceil((notifications.length - 1) / regions.length)
 
-          // Check if this error is already scheduled to be shown
-          const alreadyScheduled = showSequence.some((group) =>
-            group.some((indexInZone) => {
-              const errorsPerZone = Math.floor(notifications.length / 8)
-              const actualIndex =
-                Math.floor(indexInZone / 2) * errorsPerZone + (indexInZone % 2) + 1
-              return actualIndex === index
+        for (let i = 0; i < maxErrorsPerRegion; i++) {
+          for (let r = 0; r < regions.length; r++) {
+            if (i < regions[r].indices.length) {
+              sequence.push(regions[r].indices[i])
+            }
+          }
+        }
+
+        return sequence
+      }
+
+      const displaySequence = createDisplaySequence()
+
+      // Show errors with staggered timing in the rotating sequence
+      displaySequence.forEach((index, sequencePosition) => {
+        setTimeout(
+          () => {
+            setErrorNotifications((prev) => {
+              return prev.map((err, i) => {
+                if (i === index) {
+                  return { ...err, visible: true }
+                }
+                return err
+              })
             })
-          )
-
-          if (!alreadyScheduled) {
-            const delay = 2500 + index * 75 // Show remaining errors after the choreographed ones
-
-            setTimeout(() => {
-              setErrorNotifications((prev) => {
-                return prev.map((err, i) => {
-                  if (i === index) {
-                    return { ...err, visible: true }
-                  }
-                  return err
-                })
-              })
-            }, delay)
-          }
-        })
-      }, delayBase + 2000)
+          },
+          500 + sequencePosition * 100
+        ) // Start after 500ms, then add 100ms per error
+      })
     }, 2000)
   }
 
