@@ -11,6 +11,11 @@ import { encryptSecret } from '@/lib/utils'
 
 const logger = createLogger('ChatAPI')
 
+const outputBlockSchema = z.object({
+  blockId: z.string(),
+  path: z.string().optional(),
+})
+
 // Define Zod schema for API request validation
 const chatSchema = z.object({
   workflowId: z.string().min(1, "Workflow ID is required"),
@@ -25,8 +30,7 @@ const chatSchema = z.object({
   authType: z.enum(["public", "password", "email"]).default("public"),
   password: z.string().optional(),
   allowedEmails: z.array(z.string()).optional().default([]),
-  outputBlockId: z.string().optional(),
-  outputPath: z.string().optional(),
+  outputBlocks: z.array(outputBlockSchema).default([]),
 })
 
 export async function GET(request: NextRequest) {
@@ -74,8 +78,7 @@ export async function POST(request: NextRequest) {
         authType = 'public',
         password,
         allowedEmails = [],
-        outputBlockId,
-        outputPath
+        outputBlocks = []
       } = validatedData
       
       // Perform additional validation specific to auth types
@@ -132,8 +135,7 @@ export async function POST(request: NextRequest) {
         authType,
         hasPassword: !!encryptedPassword,
         emailCount: allowedEmails?.length || 0,
-        outputBlockId,
-        outputPath
+        outputBlocksCount: outputBlocks?.length || 0
       })
       
       await db.insert(chat).values({
@@ -148,8 +150,7 @@ export async function POST(request: NextRequest) {
         authType,
         password: encryptedPassword,
         allowedEmails: authType === 'email' ? allowedEmails : [],
-        outputBlockId: outputBlockId || null,  
-        outputPath: outputPath || null,        
+        outputBlocks: outputBlocks || [],
         createdAt: new Date(),
         updatedAt: new Date(),
       })

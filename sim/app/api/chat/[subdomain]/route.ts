@@ -34,8 +34,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         authType: chat.authType,
         password: chat.password,
         allowedEmails: chat.allowedEmails,
-        outputBlockId: chat.outputBlockId,
-        outputPath: chat.outputPath,
+        outputBlocks: chat.outputBlocks,
       })
       .from(chat)
       .where(eq(chat.subdomain, subdomain))
@@ -166,6 +165,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         authType: chat.authType,
         password: chat.password,
         allowedEmails: chat.allowedEmails,
+        outputBlocks: chat.outputBlocks,
       })
       .from(chat)
       .where(eq(chat.subdomain, subdomain))

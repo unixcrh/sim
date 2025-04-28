@@ -1,27 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useWorkflowStore } from '@/stores/workflows/workflow/store'
 import { getBlock } from '@/blocks'
 
 interface OutputSelectProps {
   workflowId: string | null
-  selectedOutput: string | null
-  onOutputSelect: (outputId: string) => void
+  selectedOutputs: string[] | null
+  onOutputSelect: (outputIds: string[]) => void
   disabled?: boolean
   placeholder?: string
+  multiple?: boolean
 }
 
 export function OutputSelect({
   workflowId,
-  selectedOutput,
+  selectedOutputs,
   onOutputSelect,
   disabled = false,
   placeholder = 'Select output source',
+  multiple = true
 }: OutputSelectProps) {
   const [isOutputDropdownOpen, setIsOutputDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const blocks = useWorkflowStore((state) => state.blocks)
+
+  // Handle backward compatibility with single selection
+  const normalizedSelectedOutputs = useMemo(() => {
+    if (!selectedOutputs) return []
+    return Array.isArray(selectedOutputs) ? selectedOutputs : [selectedOutputs]
+  }, [selectedOutputs])
 
   // Get workflow outputs for the dropdown
   const workflowOutputs = useMemo(() => {
@@ -76,19 +84,26 @@ export function OutputSelect({
     return outputs
   }, [blocks, workflowId])
 
-  // Get selected output display name
-  const selectedOutputDisplayName = useMemo(() => {
-    if (!selectedOutput) return placeholder
-    const output = workflowOutputs.find((o) => o.id === selectedOutput)
-    return output
-      ? `${output.blockName.replace(/\s+/g, '').toLowerCase()}.${output.path}`
-      : placeholder
-  }, [selectedOutput, workflowOutputs, placeholder])
+  // Get selected output display name for the button display
+  const selectedOutputsDisplay = useMemo(() => {
+    if (!normalizedSelectedOutputs.length) return placeholder
+    
+    // For single selection or display of one item
+    if (normalizedSelectedOutputs.length === 1 || !multiple) {
+      const output = workflowOutputs.find((o) => o.id === normalizedSelectedOutputs[0])
+      return output
+        ? `${output.blockName.replace(/\s+/g, '').toLowerCase()}.${output.path}`
+        : placeholder
+    }
+    
+    // For multiple selections
+    return `${normalizedSelectedOutputs.length} ${normalizedSelectedOutputs.length === 1 ? 'output' : 'outputs'} selected`
+  }, [normalizedSelectedOutputs, workflowOutputs, placeholder, multiple])
 
-  // Get selected output block info
-  const selectedOutputInfo = useMemo(() => {
-    if (!selectedOutput) return null
-    const output = workflowOutputs.find((o) => o.id === selectedOutput)
+  // Get selected output block info for the first selected item (for display)
+  const firstSelectedOutputInfo = useMemo(() => {
+    if (!normalizedSelectedOutputs.length) return null
+    const output = workflowOutputs.find((o) => o.id === normalizedSelectedOutputs[0])
     if (!output) return null
 
     return {
@@ -97,7 +112,7 @@ export function OutputSelect({
       blockType: output.blockType,
       path: output.path,
     }
-  }, [selectedOutput, workflowOutputs])
+  }, [normalizedSelectedOutputs, workflowOutputs])
 
   // Group output options by block
   const groupedOutputs = useMemo(() => {
@@ -192,10 +207,29 @@ export function OutputSelect({
     }
   }, [])
 
-  // Handle output selection
+  // Simplified output selection handler
   const handleOutputSelection = (value: string) => {
-    onOutputSelect(value)
-    setIsOutputDropdownOpen(false)
+    // Make a copy of the current selections
+    const newSelectedOutputs = [...normalizedSelectedOutputs]
+    
+    if (multiple) {
+      // For multiple selection mode
+      const index = newSelectedOutputs.indexOf(value)
+      
+      if (index >= 0) {
+        // Remove if already selected
+        newSelectedOutputs.splice(index, 1)
+      } else {
+        // Add if not selected
+        newSelectedOutputs.push(value)
+      }
+      
+      onOutputSelect(newSelectedOutputs)
+    } else {
+      // For single selection mode, just select this one
+      onOutputSelect([value])
+      setIsOutputDropdownOpen(false)
+    }
   }
 
   return (
@@ -210,25 +244,25 @@ export function OutputSelect({
         }`}
         disabled={workflowOutputs.length === 0 || disabled}
       >
-        {selectedOutputInfo ? (
+        {normalizedSelectedOutputs.length > 0 && firstSelectedOutputInfo ? (
           <div className="flex items-center gap-2 w-[calc(100%-24px)] overflow-hidden">
             <div
               className="flex items-center justify-center w-5 h-5 rounded flex-shrink-0"
               style={{
                 backgroundColor: getOutputColor(
-                  selectedOutputInfo.blockId,
-                  selectedOutputInfo.blockType
+                  firstSelectedOutputInfo.blockId,
+                  firstSelectedOutputInfo.blockType
                 ),
               }}
             >
               <span className="w-3 h-3 text-white font-bold text-xs">
-                {selectedOutputInfo.blockName.charAt(0).toUpperCase()}
+                {firstSelectedOutputInfo.blockName.charAt(0).toUpperCase()}
               </span>
             </div>
-            <span className="truncate">{selectedOutputDisplayName}</span>
+            <span className="truncate">{selectedOutputsDisplay}</span>
           </div>
         ) : (
-          <span className="truncate w-[calc(100%-24px)]">{selectedOutputDisplayName}</span>
+          <span className="truncate w-[calc(100%-24px)]">{selectedOutputsDisplay}</span>
         )}
         <ChevronDown
           className={`h-4 w-4 transition-transform ml-1 flex-shrink-0 ${
@@ -246,35 +280,66 @@ export function OutputSelect({
                   {blockName}
                 </div>
                 <div>
-                  {outputs.map((output) => (
-                    <button
-                      type="button"
-                      key={output.id}
-                      onClick={() => handleOutputSelection(output.id)}
-                      className={cn(
-                        'flex items-center gap-2 text-sm text-left w-full px-3 py-1.5',
-                        'hover:bg-accent hover:text-accent-foreground',
-                        'focus:bg-accent focus:text-accent-foreground focus:outline-none',
-                        selectedOutput === output.id && 'bg-accent text-accent-foreground'
-                      )}
-                    >
+                  {outputs.map((output) => {
+                    const isSelected = normalizedSelectedOutputs.includes(output.id)
+                    return (
                       <div
-                        className="flex items-center justify-center w-5 h-5 rounded flex-shrink-0"
-                        style={{
-                          backgroundColor: getOutputColor(output.blockId, output.blockType),
-                        }}
+                        role="button"
+                        key={output.id}
+                        onClick={() => handleOutputSelection(output.id)}
+                        className={cn(
+                          'flex items-center gap-2 text-sm text-left w-full px-3 py-1.5',
+                          'hover:bg-accent hover:text-accent-foreground',
+                          'focus:bg-accent focus:text-accent-foreground focus:outline-none',
+                          'cursor-pointer',
+                          !multiple && isSelected && 'bg-accent text-accent-foreground'
+                        )}
                       >
-                        <span className="w-3 h-3 text-white font-bold text-xs">
-                          {blockName.charAt(0).toUpperCase()}
-                        </span>
+                        {multiple && (
+                          <div className="flex items-center justify-center mr-2">
+                            {/* Simple checkbox implementation to avoid nested state updates */}
+                            <div 
+                              className={cn(
+                                "h-4 w-4 shrink-0 rounded-sm border border-primary flex items-center justify-center",
+                                isSelected && "bg-primary text-primary-foreground"
+                              )}
+                            >
+                              {isSelected && <Check className="h-3 w-3" />}
+                            </div>
+                          </div>
+                        )}
+                        <div
+                          className="flex items-center justify-center w-5 h-5 rounded flex-shrink-0"
+                          style={{
+                            backgroundColor: getOutputColor(output.blockId, output.blockType),
+                          }}
+                        >
+                          <span className="w-3 h-3 text-white font-bold text-xs">
+                            {blockName.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <span className="truncate max-w-[calc(100%-60px)]">{output.path}</span>
                       </div>
-                      <span className="truncate max-w-[calc(100%-28px)]">{output.path}</span>
-                    </button>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             ))}
           </div>
+          {multiple && normalizedSelectedOutputs.length > 0 && (
+            <div className="p-2 border-t">
+              <div
+                role="button"
+                onClick={() => {
+                  onOutputSelect([])
+                  setIsOutputDropdownOpen(false)
+                }}
+                className="text-xs text-destructive hover:underline cursor-pointer"
+              >
+                Clear all selections
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

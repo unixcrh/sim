@@ -241,8 +241,7 @@ export async function executeWorkflowForChat(chatId: string, message: string) {
       id: chat.id,
       workflowId: chat.workflowId,
       userId: chat.userId,
-      outputBlockId: chat.outputBlockId,
-      outputPath: chat.outputPath,
+      outputBlocks: chat.outputBlocks,
     })
     .from(chat)
     .where(eq(chat.id, chatId))
@@ -417,22 +416,40 @@ export async function executeWorkflowForChat(chatId: string, message: string) {
   // Get the output based on the selected block
   let output
   
-  if (deployment.outputBlockId) {
-    // Determine appropriate output
-    const blockId = deployment.outputBlockId
-    const path = deployment.outputPath
+  // Check for output blocks configuration
+  if (deployment.outputBlocks && Array.isArray(deployment.outputBlocks) && deployment.outputBlocks.length > 0) {
+    logger.debug(`[${requestId}] Using output blocks configuration with ${deployment.outputBlocks.length} blocks`)
     
-    // This is identical to what the chat panel does to extract outputs
-    logger.debug(`[${requestId}] Looking for output from block ${blockId} with path ${path || 'none'}`)
+    const outputs: any[] = []
     
-    // Extract the specific block output
+    // Process each output block
     if (result.logs) {
-      output = extractBlockOutput(result.logs, blockId, path || undefined)
+      for (const outputConfig of deployment.outputBlocks) {
+        if (outputConfig.blockId) {
+          const blockOutput = extractBlockOutput(
+            result.logs, 
+            outputConfig.blockId, 
+            outputConfig.path || undefined
+          )
+          
+          if (blockOutput !== null && blockOutput !== undefined) {
+            logger.debug(`[${requestId}] Found output for block ${outputConfig.blockId}`)
+            outputs.push(blockOutput)
+          }
+        }
+      }
       
-      if (output !== null && output !== undefined) {
-        logger.debug(`[${requestId}] Found specific block output`)
+      // If any outputs were found, use them
+      if (outputs.length > 0) {
+        // If only one output, return it directly
+        if (outputs.length === 1) {
+          output = outputs[0]
+        } else {
+          // Otherwise return an array of outputs
+          output = outputs
+        }
       } else {
-        logger.warn(`[${requestId}] Could not find specific block output, falling back to final output`)
+        logger.warn(`[${requestId}] No outputs found from output blocks, falling back to final output`)
         output = result.output?.response || result.output
       }
     } else {
@@ -440,8 +457,8 @@ export async function executeWorkflowForChat(chatId: string, message: string) {
       output = result.output?.response || result.output
     }
   } else {
-    // No specific block selected, use final output
-    logger.debug(`[${requestId}] No output block specified, using final output`)
+    // No output blocks specified, use final output
+    logger.debug(`[${requestId}] No output blocks specified, using final output`)
     output = result.output?.response || result.output
   }
   

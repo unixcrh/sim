@@ -19,7 +19,7 @@ export const user = pgTable('user', {
   createdAt: timestamp('created_at').notNull(),
   updatedAt: timestamp('updated_at').notNull(),
   stripeCustomerId: text('stripe_customer_id')
-});
+})
 
 export const session = pgTable('session', {
   id: text('id').primaryKey(),
@@ -238,7 +238,7 @@ export const subscription = pgTable("subscription", {
   seats: integer('seats'),
   trialStart: timestamp('trial_start'),
   trialEnd: timestamp('trial_end')
-});
+})
 
 export const chat = pgTable('chat', {
   id: text('id').primaryKey(),
@@ -260,8 +260,12 @@ export const chat = pgTable('chat', {
   allowedEmails: json('allowed_emails').default('[]'), // Array of allowed emails or domains when authType is 'email'
   
   // Output configuration
-  outputBlockId: text('output_block_id'), // Stores the selected output block ID
-  outputPath: text('output_path'), // Stores the output path within the block
+  // @deprecated - These fields are kept for backward compatibility, use outputBlocks instead
+  outputBlockId: text('output_block_id'), 
+  outputPath: text('output_path'),
+  
+  // Primary output configuration - array of objects with blockId and optional path
+  outputBlocks: json('output_blocks').default('[]'),
   
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -282,7 +286,7 @@ export const organization = pgTable("organization", {
   metadata: jsonb('metadata'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+})
 
 export const member = pgTable("member", {
   id: text('id').primaryKey(),
@@ -290,7 +294,7 @@ export const member = pgTable("member", {
   organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
   role: text('role').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull()
-});
+})
 
 export const invitation = pgTable("invitation", {
   id: text('id').primaryKey(),
@@ -301,4 +305,4 @@ export const invitation = pgTable("invitation", {
   status: text('status').notNull(),
   expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull()
-});
+})

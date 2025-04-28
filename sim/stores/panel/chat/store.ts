@@ -39,17 +39,18 @@ export const useChatStore = create<ChatStore>()(
           return get().messages.filter((message) => message.workflowId === workflowId)
         },
 
-        setSelectedWorkflowOutput: (workflowId, outputId) => {
+        setSelectedWorkflowOutput: (workflowId, outputIds) => {
           set((state) => ({
             selectedWorkflowOutputs: {
               ...state.selectedWorkflowOutputs,
-              [workflowId]: outputId,
+              [workflowId]: outputIds,
             },
           }))
         },
 
         getSelectedWorkflowOutput: (workflowId) => {
-          return get().selectedWorkflowOutputs[workflowId] || null
+          const outputs = get().selectedWorkflowOutputs[workflowId]
+          return outputs || null
         },
       }),
       {

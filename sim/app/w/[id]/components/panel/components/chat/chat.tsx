@@ -48,13 +48,66 @@ export function Chat({ panelWidth, chatMessage, setChatMessage }: ChatProps) {
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
   }, [messages, activeWorkflowId])
 
-  // Get selected workflow output
-  const selectedOutput = useMemo(() => {
-    if (!activeWorkflowId) return null
-    const selectedId = selectedWorkflowOutputs[activeWorkflowId]
-    if (!selectedId) return outputEntries[0]?.id || null
-    return selectedId
-  }, [selectedWorkflowOutputs, activeWorkflowId, outputEntries])
+  // Get selected workflow outputs
+  const selectedOutputs = useMemo(() => {
+    if (!activeWorkflowId) return []
+    
+    // Get the outputs array for the active workflow
+    const outputs = selectedWorkflowOutputs[activeWorkflowId]
+    
+    // If no selection exists yet, return empty array
+    if (!outputs || outputs.length === 0) {
+      // Default to the first output if available
+      const defaultOutput = outputEntries.length > 0 ? [outputEntries[0].id] : []
+      return defaultOutput
+    }
+    
+    // Filter out any stale outputs that no longer exist in the workflow
+    const validOutputs = outputs.filter(outputId => {
+      // Extract the blockId from the outputId format "blockId_path"
+      const blockId = outputId.split('_')[0]
+      return !!blocks[blockId] // Check if block still exists
+    })
+    
+    // If filtering removed all outputs, default to the first available
+    if (validOutputs.length === 0 && outputEntries.length > 0) {
+      const defaultOutput = [outputEntries[0].id]
+      return defaultOutput
+    }
+    
+    return validOutputs
+  }, [selectedWorkflowOutputs, activeWorkflowId, outputEntries, blocks])
+
+  // Handle default output selection or cleanup via useEffect, not during render
+  useEffect(() => {
+    if (!activeWorkflowId) return
+    
+    const outputs = selectedWorkflowOutputs[activeWorkflowId]
+    
+    // If no selection exists yet, set the default
+    if (!outputs || outputs.length === 0) {
+      if (outputEntries.length > 0) {
+        const defaultOutput = [outputEntries[0].id]
+        setSelectedWorkflowOutput(activeWorkflowId, defaultOutput)
+      }
+      return
+    }
+    
+    // Filter out any stale outputs that no longer exist in the workflow
+    const validOutputs = outputs.filter(outputId => {
+      const blockId = outputId.split('_')[0]
+      return !!blocks[blockId]
+    })
+    
+    // If filtering removed all outputs, default to the first available
+    if (validOutputs.length === 0 && outputEntries.length > 0) {
+      const defaultOutput = [outputEntries[0].id]
+      setSelectedWorkflowOutput(activeWorkflowId, defaultOutput)
+    } else if (validOutputs.length !== outputs.length) {
+      // Update if some outputs were filtered out
+      setSelectedWorkflowOutput(activeWorkflowId, validOutputs)
+    }
+  }, [selectedWorkflowOutputs, activeWorkflowId, outputEntries, blocks, setSelectedWorkflowOutput])
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
@@ -93,10 +146,10 @@ export function Chat({ panelWidth, chatMessage, setChatMessage }: ChatProps) {
     }
   }
 
-  // Handle output selection
-  const handleOutputSelection = (value: string) => {
+  // Handle output selection - now receiving an array of outputs
+  const handleOutputSelection = (values: string[]) => {
     if (activeWorkflowId) {
-      setSelectedWorkflowOutput(activeWorkflowId, value)
+      setSelectedWorkflowOutput(activeWorkflowId, values)
     }
   }
 
@@ -106,10 +159,15 @@ export function Chat({ panelWidth, chatMessage, setChatMessage }: ChatProps) {
       <div className="flex-none border-b px-4 py-2">
         <OutputSelect 
           workflowId={activeWorkflowId}
-          selectedOutput={selectedOutput}
-          onOutputSelect={handleOutputSelection}
+          selectedOutputs={selectedOutputs}
+          onOutputSelect={(values) => {
+            if (activeWorkflowId) {
+              setSelectedWorkflowOutput(activeWorkflowId, values)
+            }
+          }}
           disabled={!activeWorkflowId}
-          placeholder="Select output source"
+          placeholder="Select output sources"
+          multiple={true}
         />
       </div>
 

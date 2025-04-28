@@ -1,0 +1,1 @@
+ALTER TABLE "chat" ADD COLUMN "output_blocks" json DEFAULT '[]';

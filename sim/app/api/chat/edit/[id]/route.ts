@@ -27,8 +27,10 @@ const chatUpdateSchema = z.object({
   authType: z.enum(["public", "password", "email"]).optional(),
   password: z.string().optional(),
   allowedEmails: z.array(z.string()).optional(),
-  outputBlockId: z.string().optional(),
-  outputPath: z.string().optional(),
+  outputBlocks: z.array(z.object({
+    blockId: z.string(),
+    path: z.string().optional(),
+  })).optional(),
 })
 
 /**
@@ -50,7 +52,22 @@ export async function GET(
     
     // Get the specific chat deployment
     const chatInstance = await db
-      .select()
+      .select({
+        id: chat.id,
+        workflowId: chat.workflowId,
+        userId: chat.userId,
+        subdomain: chat.subdomain,
+        title: chat.title,
+        description: chat.description,
+        customizations: chat.customizations,
+        isActive: chat.isActive,
+        authType: chat.authType,
+        password: chat.password, 
+        allowedEmails: chat.allowedEmails,
+        outputBlocks: chat.outputBlocks,
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt
+      })
       .from(chat)
       .where(and(
         eq(chat.id, chatId),
@@ -132,8 +149,7 @@ export async function PATCH(
         authType,
         password,
         allowedEmails,
-        outputBlockId,
-        outputPath
+        outputBlocks
       } = validatedData
       
       // Check if subdomain is changing and if it's available
@@ -208,17 +224,21 @@ export async function PATCH(
         updateData.allowedEmails = allowedEmails
       }
       
-      // Handle output fields
-      if (outputBlockId !== undefined) updateData.outputBlockId = outputBlockId
-      if (outputPath !== undefined) updateData.outputPath = outputPath
+      // Handle output blocks
+      if (outputBlocks) {
+        updateData.outputBlocks = outputBlocks
+        
+        // Also clear out the legacy fields to avoid confusion
+        updateData.outputBlockId = null
+        updateData.outputPath = null
+      }
       
       logger.info('Updating chat deployment with values:', {
         chatId,
         authType: updateData.authType,
         hasPassword: updateData.password !== undefined,
         emailCount: updateData.allowedEmails?.length,
-        outputBlockId: updateData.outputBlockId,
-        outputPath: updateData.outputPath
+        outputBlocksCount: updateData.outputBlocks?.length
       })
       
       // Update the chat deployment

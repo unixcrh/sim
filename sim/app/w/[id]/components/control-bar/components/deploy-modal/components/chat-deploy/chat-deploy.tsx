@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Check,
-  Circle,
   Copy,
   Eye,
   EyeOff,
@@ -27,7 +26,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { CopyButton } from '@/components/ui/copy-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -131,8 +129,8 @@ export function ChatDeploy({
   const [showEditConfirmation, setShowEditConfirmation] = useState(false)
   const [internalShowDeleteConfirmation, setInternalShowDeleteConfirmation] = useState(false)
 
-  // Output block selection
-  const [selectedOutputBlock, setSelectedOutputBlock] = useState<string | null>(null)
+  // Output block selection - changed to array for multiple selections
+  const [selectedOutputBlocks, setSelectedOutputBlocks] = useState<string[] | null>(null)
 
   // Track manual submission state
   const [chatSubmitting, setChatSubmitting] = useState(false)
@@ -191,7 +189,7 @@ export function ChatDeploy({
       const subdomainChanged = subdomain !== originalValues.subdomain
       const titleChanged = title !== originalValues.title
       const descriptionChanged = description !== originalValues.description
-      const outputBlockChanged = selectedOutputBlock !== originalValues.outputBlockId
+      const outputBlockChanged = selectedOutputBlocks !== originalValues.outputBlockId
       const welcomeMessageChanged =
         welcomeMessage !==
         (existingChat.customizations?.welcomeMessage || 'Hi there! How can I help you today?')
@@ -224,7 +222,7 @@ export function ChatDeploy({
     authType,
     emails,
     password,
-    selectedOutputBlock,
+    selectedOutputBlocks,
     welcomeMessage,
     originalValues,
   ])
@@ -276,7 +274,22 @@ export function ChatDeploy({
             // Inside the fetchExistingChat function - after loading other form values
             if (chatDetail.outputBlockId && chatDetail.outputPath) {
               const combinedOutputId = `${chatDetail.outputBlockId}_${chatDetail.outputPath}`
-              setSelectedOutputBlock(combinedOutputId)
+              // Initialize with the primary output as an array
+              const outputs = [combinedOutputId]
+              
+              // Add any additional outputs if available
+              if (chatDetail.outputBlocks && Array.isArray(chatDetail.outputBlocks)) {
+                chatDetail.outputBlocks.forEach((output: { blockId?: string; path?: string }) => {
+                  if (output.blockId && output.path) {
+                    const outputId = `${output.blockId}_${output.path}`
+                    if (!outputs.includes(outputId)) {
+                      outputs.push(outputId)
+                    }
+                  }
+                })
+              }
+              
+              setSelectedOutputBlocks(outputs)
             }
 
             // Set welcome message if it exists
@@ -465,7 +478,7 @@ export function ChatDeploy({
       subdomain,
       title,
       authType,
-      hasOutputBlockSelection: !!selectedOutputBlock,
+      hasOutputBlockSelection: !!selectedOutputBlocks,
     })
 
     // Basic validation
@@ -505,10 +518,12 @@ export function ChatDeploy({
     }
 
     // Verify output selection if it's set
-    if (selectedOutputBlock) {
-      const firstUnderscoreIndex = selectedOutputBlock.indexOf('_')
+    if (selectedOutputBlocks && selectedOutputBlocks.length > 0) {
+      // Check the first output to make sure it's valid
+      const firstOutput = selectedOutputBlocks[0]
+      const firstUnderscoreIndex = firstOutput.indexOf('_')
       if (firstUnderscoreIndex === -1) {
-        logger.error('Invalid output block format', { selectedOutputBlock })
+        logger.error('Invalid output block format', { selectedOutputBlocks })
         setErrorMessage('Invalid output block format. Please select a valid output.')
         setChatSubmitting(false)
         return
@@ -596,24 +611,40 @@ export function ChatDeploy({
       }
 
       // Add output block configuration if selected
-      if (selectedOutputBlock) {
-        const firstUnderscoreIndex = selectedOutputBlock.indexOf('_')
+      if (selectedOutputBlocks && selectedOutputBlocks.length > 0) {
+        // For compatibility with existing API, use the first output as the primary
+        const firstOutput = selectedOutputBlocks[0]
+        const firstUnderscoreIndex = firstOutput.indexOf('_')
         if (firstUnderscoreIndex !== -1) {
-          const blockId = selectedOutputBlock.substring(0, firstUnderscoreIndex)
-          const path = selectedOutputBlock.substring(firstUnderscoreIndex + 1)
+          const blockId = firstOutput.substring(0, firstUnderscoreIndex)
+          const path = firstOutput.substring(firstUnderscoreIndex + 1)
 
           payload.outputBlockId = blockId
           payload.outputPath = path
 
+          // Also include the full array for future use
+          payload.outputBlocks = selectedOutputBlocks.map((output: string) => {
+            const idx = output.indexOf('_')
+            if (idx !== -1) {
+              return {
+                blockId: output.substring(0, idx),
+                path: output.substring(idx + 1)
+              }
+            }
+            return null
+          }).filter(Boolean)
+
           logger.info('Added output configuration to payload:', {
             outputBlockId: blockId,
             outputPath: path,
+            totalOutputsSelected: selectedOutputBlocks.length
           })
         }
       } else {
         // No output block selected - explicitly set to null
         payload.outputBlockId = null
         payload.outputPath = null
+        payload.outputBlocks = []
       }
 
       // Pass the API key from workflow deployment
@@ -941,30 +972,30 @@ export function ChatDeploy({
           {/* Output Configuration */}
           <div className="space-y-2">
             <div>
-              <Label className="text-sm font-medium">Chat Output</Label>
+              <Label className="text-sm font-medium">Chat Outputs</Label>
             </div>
 
             <Card className="border-input rounded-md shadow-none">
               <CardContent className="p-1">
                 <OutputSelect
                   workflowId={workflowId}
-                  selectedOutput={selectedOutputBlock}
-                  onOutputSelect={(value) => {
-                    logger.info(`Output block selection changed to: ${value}`)
-                    setSelectedOutputBlock(value)
-
-                    // Mark as changed to enable update button
+                  selectedOutputs={selectedOutputBlocks}
+                  onOutputSelect={(values) => {
+                    // Simple direct assignment avoids potential circular updates
+                    setSelectedOutputBlocks(values)
+                    // Mark as changed if this is an edit
                     if (existingChat) {
                       setHasChanges(true)
                     }
                   }}
-                  placeholder="Select which block output to use"
+                  placeholder="Select which block outputs to use"
                   disabled={isDeploying}
+                  multiple={true}
                 />
               </CardContent>
             </Card>
             <p className="text-xs text-muted-foreground mt-2">
-              Select which block's output to return to the user in the chat interface
+              Select which blocks' outputs to return to the user in the chat interface
             </p>
           </div>
 
